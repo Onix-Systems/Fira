@@ -1,3 +1,7 @@
+
+[![Landing Site](https://img.shields.io/badge/Website-Gecko%20Bootloader%20Parser%20SDK-blue?logo=web)](https://onix-systems-android-tasks.dev.onix.team/landing/index.html)
+[![Wiki](https://img.shields.io/badge/Tool-GBL%20File%20Parser%20%26%20Builder-green?logo=tools)](https://github.com/Onix-Systems/Fira/wiki)
+
 # Fira - Project Management Platform
 
 Visual Kanban project management with task tracking and team collaboration.
