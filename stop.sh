@@ -3,43 +3,78 @@
 # Fira Project Management Server
 # Stop script for macOS and Linux
 
-echo "🛑 Stopping Fira server..."
+echo "Checking for Fira servers..."
 
-# Find and kill Python processes running server.py
-PIDS=$(pgrep -f "python.*server.py")
+FOUND_SERVERS=0
 
-if [ -z "$PIDS" ]; then
-    echo "ℹ️  No Fira server processes found running"
-else
-    echo "🔍 Found server processes: $PIDS"
+# Find and kill Python processes running server.py or mini-server.py
+echo "Checking for Fira server processes..."
+SERVER_PIDS=$(pgrep -f "python.*(server\.py|mini-server\.py)")
+
+if [ ! -z "$SERVER_PIDS" ]; then
+    echo "Found server processes: $SERVER_PIDS"
+    FOUND_SERVERS=1
     
     # Kill the processes
-    for PID in $PIDS; do
-        echo "🔄 Stopping process $PID..."
+    for PID in $SERVER_PIDS; do
+        echo "Stopping process $PID..."
         kill $PID
         sleep 1
         
         # Check if process is still running and force kill if needed
         if ps -p $PID > /dev/null 2>&1; then
-            echo "🔨 Force stopping process $PID..."
+            echo "Force stopping process $PID..."
             kill -9 $PID
         fi
     done
-    
-    echo "✅ Fira server stopped successfully"
 fi
 
-# Also check for Flask processes on port 5000
-FLASK_PID=$(lsof -ti:5000 2>/dev/null)
-if [ ! -z "$FLASK_PID" ]; then
-    echo "🔄 Stopping process using port 5000: $FLASK_PID"
-    kill $FLASK_PID
+# Check processes using Fira ports
+echo "Checking processes on Fira ports..."
+
+# Port 5000 (Flask API)
+PORT_5000_PID=$(lsof -ti:5000 2>/dev/null)
+if [ ! -z "$PORT_5000_PID" ]; then
+    echo "Stopping process using port 5000: $PORT_5000_PID"
+    kill $PORT_5000_PID
     sleep 1
     
-    if ps -p $FLASK_PID > /dev/null 2>&1; then
-        kill -9 $FLASK_PID
+    if ps -p $PORT_5000_PID > /dev/null 2>&1; then
+        kill -9 $PORT_5000_PID
     fi
-    echo "✅ Port 5000 freed"
+    FOUND_SERVERS=1
 fi
 
-echo "🎉 All done!"
+# Port 8080 (HTTP server)
+PORT_8080_PID=$(lsof -ti:8080 2>/dev/null)
+if [ ! -z "$PORT_8080_PID" ]; then
+    echo "Stopping process using port 8080: $PORT_8080_PID"
+    kill $PORT_8080_PID
+    sleep 1
+    
+    if ps -p $PORT_8080_PID > /dev/null 2>&1; then
+        kill -9 $PORT_8080_PID
+    fi
+    FOUND_SERVERS=1
+fi
+
+# Port 8081 (Alternative HTTP server)
+PORT_8081_PID=$(lsof -ti:8081 2>/dev/null)
+if [ ! -z "$PORT_8081_PID" ]; then
+    echo "Stopping process using port 8081: $PORT_8081_PID"
+    kill $PORT_8081_PID
+    sleep 1
+    
+    if ps -p $PORT_8081_PID > /dev/null 2>&1; then
+        kill -9 $PORT_8081_PID
+    fi
+    FOUND_SERVERS=1
+fi
+
+echo ""
+if [ "$FOUND_SERVERS" = "1" ]; then
+    echo "Fira servers stopped successfully!"
+else
+    echo "No Fira servers were running."
+fi
+echo "All done!"

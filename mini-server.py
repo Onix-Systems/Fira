@@ -21,7 +21,7 @@ import secrets
 
 # Firebase integration disabled - using local JSON file
 FIREBASE_ENABLED = False
-print("📁 Using local users.json file for authentication")
+print("Using local users.json file for authentication")
 
 # Local users file management
 def load_users():
@@ -34,7 +34,7 @@ def load_users():
                 return data.get('users', [])
         return []
     except Exception as e:
-        print(f"❌ Error loading users.json: {e}")
+        print(f"Error loading users.json: {e}")
         return []
 
 def save_users(users):
@@ -46,7 +46,7 @@ def save_users(users):
             json.dump(data, f, indent=2, ensure_ascii=False)
         return True
     except Exception as e:
-        print(f"❌ Error saving users.json: {e}")
+        print(f"Error saving users.json: {e}")
         return False
 
 def authenticate_user(email, password):
@@ -170,18 +170,18 @@ class ProjectManager:
         """Create a new project folder with standard subfolders and README"""
         project_id = project_data.get('id')
         if not project_id:
-            print("❌ Missing project ID")
+            print("Missing project ID")
             return False, "Missing project ID"
 
         project_path = self.base_dir / project_id
         if project_path.exists():
-            print(f"❌ Project already exists: {project_id}")
+            print(f"Project already exists: {project_id}")
             return False, f"Project {project_id} already exists"
 
         try:
             # Створюємо головну папку проекту
             project_path.mkdir(parents=True, exist_ok=False)
-            print(f"✅ Created project folder: {project_path}")
+            print(f"Created project folder: {project_path}")
 
             # Створюємо README.md
             description = project_data.get('description', f"Project {project_id}")
@@ -201,11 +201,11 @@ class ProjectManager:
                     dev_path = col_path / default_dev
                     dev_path.mkdir(parents=True, exist_ok=True)
 
-            print(f"📁 Created standard project folders: {', '.join(columns)}")
+            print(f"Created standard project folders: {', '.join(columns)}")
             return True, None
 
         except Exception as e:
-            print(f"❌ Error creating project {project_id}: {e}")
+            print(f"Error creating project {project_id}: {e}")
             return False, str(e)
 
     def get_projects(self):
@@ -215,16 +215,16 @@ class ProjectManager:
             print(f"⚠️  Projects directory not found: {self.base_dir}")
             return projects
 
-        print(f"📁 Scanning projects directory: {self.base_dir}")
+        print(f"Scanning projects directory: {self.base_dir}")
 
         for project_dir in self.base_dir.iterdir():
             if project_dir.is_dir() and not project_dir.name.startswith('.'):
                 project_info = self.get_project_info(project_dir.name)
                 if project_info:
                     projects.append(project_info)
-                    print(f"✅ Added project: {project_dir.name}")
+                    print(f"Added project: {project_dir.name}")
 
-        print(f"📋 Total projects found: {len(projects)}")
+        print(f"Total projects found: {len(projects)}")
         return projects
 
     def get_project_info(self, project_id):
@@ -318,7 +318,7 @@ class ProjectManager:
                 for item in folder_path.iterdir():
                     if item.is_dir() and (item.name.startswith('dev-') or item.name.startswith('tech-')):
                         developers.add(item.name)
-                        print(f"👨‍💻 Found developer folder: {item.name} in {folder_name}")
+                        print(f"Found developer folder: {item.name} in {folder_name}")
 
         developer_list = sorted(list(developers))
         print(f"👥 Found {len(developer_list)} developers for project {project_id}: {developer_list}")
@@ -419,7 +419,7 @@ class ProjectManager:
             return task
 
         except Exception as e:
-            print(f"❌ Error parsing task file {file_path}: {e}")
+            print(f"Error parsing task file {file_path}: {e}")
             return None
             
     def update_project_info(self, project_id, project_data):
@@ -427,7 +427,7 @@ class ProjectManager:
         try:
             project_path = self.base_dir / project_id
             if not project_path.exists():
-                print(f"❌ Project {project_id} does not exist")
+                print(f"Project {project_id} does not exist")
                 return False
                 
             # Update project description in README.md if provided
@@ -441,12 +441,12 @@ class ProjectManager:
                     readme_content = f"# {project_id}\n\n{description}\n"
                     
                     readme_path.write_text(readme_content, encoding='utf-8')
-                    print(f"✅ Updated README.md for project {project_id}")
+                    print(f"Updated README.md for project {project_id}")
                 
             return True
             
         except Exception as e:
-            print(f"❌ Error updating project {project_id}: {e}")
+            print(f"Error updating project {project_id}: {e}")
             return False
 
 class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
@@ -498,7 +498,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                 }, 200)
 
             except Exception as e:
-                print(f"❌ Error deleting project: {e}")
+                print(f"Error deleting project: {e}")
                 self.send_json_response({
                     'success': False,
                     'error': str(e)
@@ -561,7 +561,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                 })
                 print(f"📤 Served {len(projects)} projects via API")
             except Exception as e:
-                print(f"❌ API Error: {e}")
+                print(f"API Error: {e}")
                 self.send_json_response({
                     'success': False,
                     'error': str(e)
@@ -593,9 +593,9 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                             'success': False,
                             'error': f'Task {task_id} not found in project {project_id}'
                         }, 404)
-                        print(f"❌ Task {task_id} not found in project {project_id}")
+                        print(f"Task {task_id} not found in project {project_id}")
                 except Exception as e:
-                    print(f"❌ API Error getting task: {e}")
+                    print(f"API Error getting task: {e}")
                     self.send_json_response({
                         'success': False,
                         'error': str(e)
@@ -617,7 +617,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                     })
                     print(f"📤 Served {len(tasks)} tasks for project {project_id}")
                 except Exception as e:
-                    print(f"❌ API Error getting tasks: {e}")
+                    print(f"API Error getting tasks: {e}")
                     self.send_json_response({
                         'success': False,
                         'error': str(e)
@@ -647,7 +647,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                 })
                 print(f"📤 Served {len(users)} users from JSON file to admin")
             except Exception as e:
-                print(f"❌ Error loading users: {e}")
+                print(f"Error loading users: {e}")
                 self.send_json_response({
                     'success': False,
                     'error': str(e)
@@ -701,7 +701,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                 return
 
             except Exception as e:
-                print(f"❌ Error serving image: {e}")
+                print(f"Error serving image: {e}")
                 self.send_error(500, f'Error serving image: {str(e)}')
                 return
 
@@ -724,7 +724,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
         elif parsed_path.path == '/' or parsed_path.path == '/index.html':
             if REQUIRE_LOGIN:
                 # Serve login screen for Docker/nginx deployment
-                print(f"🔐 Root path accessed - serving login screen (login required)")
+                print(f"Root path accessed - serving login screen (login required)")
                 try:
                     with open('login-screen.html', 'rb') as f:
                         content = f.read()
@@ -784,10 +784,10 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                     'method': 'local_json'
                 })
 
-                print(f"🔐 Auth validation for {username}: {'✅' if is_valid else '❌'}")
+                print(f"Auth validation for {username}: {'OK' if is_valid else 'FAILED'}")
 
             except Exception as e:
-                print(f"❌ Auth validation error: {e}")
+                print(f"Auth validation error: {e}")
                 self.send_json_response({
                     'success': False,
                     'error': str(e)
@@ -815,7 +815,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                     }, 404)
 
             except Exception as e:
-                print(f"❌ User lookup error: {e}")
+                print(f"User lookup error: {e}")
                 self.send_json_response({
                     'success': False,
                     'error': str(e)
@@ -833,10 +833,10 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                     'method': 'local_json',
                     'count': len(users_data)
                 })
-                print(f"📋 Served {len(users_data)} users from JSON file")
+                print(f"Served {len(users_data)} users from JSON file")
 
             except Exception as e:
-                print(f"❌ Users list error: {e}")
+                print(f"Users list error: {e}")
                 self.send_json_response({
                     'success': False,
                     'error': str(e),
@@ -855,7 +855,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
         
         # If it's a SPA route and file doesn't exist, serve index.html
         if is_spa_route and not os.path.isfile(file_path):
-            print(f"🔄 SPA route detected: {parsed_path.path}, serving index.html")
+            print(f"SPA route detected: {parsed_path.path}, serving index.html")
             index_path = os.path.join(self.directory, "index.html")
             if os.path.isfile(index_path):
                 self.send_response(200)
@@ -903,13 +903,13 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                             'success': True,
                             'message': 'Project updated successfully'
                         })
-                        print(f"✅ Updated project {project_id}")
+                        print(f"Updated project {project_id}")
                     else:
                         self.send_json_response({
                             'success': False,
                             'error': 'Failed to update project'
                         }, 500)
-                        print(f"❌ Failed to update project {project_id}")
+                        print(f"Failed to update project {project_id}")
                 else:
                     self.send_json_response({
                         'success': False,
@@ -921,7 +921,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                     'success': False,
                     'error': str(e)
                 }, 500)
-                print(f"❌ Error updating project: {e}")
+                print(f"Error updating project: {e}")
                 
         # Check if it's a task update endpoint
         # Expected format: /api/projects/{project_id}/tasks/{task_id}
@@ -953,13 +953,13 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                             'success': True,
                             'message': 'Task updated successfully'
                         })
-                        print(f"✅ Updated task {task_id} in project {project_id}")
+                        print(f"Updated task {task_id} in project {project_id}")
                     else:
                         self.send_json_response({
                             'success': False,
                             'error': 'Failed to update task'
                         }, 500)
-                        print(f"❌ Failed to update task {task_id}")
+                        print(f"Failed to update task {task_id}")
                 else:
                     self.send_json_response({
                         'success': False,
@@ -971,7 +971,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                     'success': False,
                     'error': str(e)
                 }, 500)
-                print(f"❌ Error updating task: {e}")
+                print(f"Error updating task: {e}")
         else:
             # Not a task update endpoint
             self.send_response(404)
@@ -1001,7 +1001,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
 
                     # Try email/username + password login first (from JSON users)
                     if email and password:
-                        print(f"🔐 Trying JSON admin login: {email}")
+                        print(f"Trying JSON admin login: {email}")
 
                         users = load_users()
                         for user in users:
@@ -1009,11 +1009,11 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                                 if user.get('role') in ['editor', 'viewer'] and user.get('active', True):
                                     login_successful = True
                                     login_method = f'json_admin_{user["role"]}'
-                                    print(f"✅ JSON admin login successful: {email} (role: {user['role']})")
+                                    print(f"JSON admin login successful: {email} (role: {user['role']})")
                                     break
 
                         if not login_successful:
-                            print(f"❌ JSON admin login failed: {email} - invalid credentials or not editor/viewer")
+                            print(f"JSON admin login failed: {email} - invalid credentials or not editor/viewer")
 
                     # If JSON login didn't work, skip to fallback admin password
 
@@ -1021,7 +1021,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                     elif password and password == ADMIN_PASSWORD:
                         login_successful = True
                         login_method = 'admin_password'
-                        print("✅ Admin password login successful")
+                        print("Admin password login successful")
 
                     if login_successful:
                         # Generate persistent token that survives server restarts
@@ -1043,13 +1043,13 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                             'method': login_method,
                             'role': user_role
                         })
-                        print(f"✅ Admin login successful via {login_method}, role: {user_role}, token: {token[:8]}...")
+                        print(f"Admin login successful via {login_method}, role: {user_role}, token: {token[:8]}...")
                     else:
                         self.send_json_response({
                             'success': False,
                             'error': 'Invalid credentials'
                         }, 401)
-                        print("❌ Admin login failed: invalid credentials")
+                        print("Admin login failed: invalid credentials")
                 else:
                     self.send_json_response({
                         'success': False,
@@ -1057,7 +1057,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                     }, 400)
 
             except Exception as e:
-                print(f"❌ Admin login error: {e}")
+                print(f"Admin login error: {e}")
                 self.send_json_response({
                     'success': False,
                     'error': 'Login failed'
@@ -1103,7 +1103,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                             'method': 'local_json',
                             'message': 'Login successful'
                         })
-                        print(f"✅ JSON login successful: {identifier}")
+                        print(f"JSON login successful: {identifier}")
                         return
 
                     # Login failed
@@ -1112,7 +1112,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                         'error': 'Invalid credentials',
                         'method': 'local_json'
                     }, 401)
-                    print(f"❌ Login failed: {identifier}")
+                    print(f"Login failed: {identifier}")
                     return
 
                 else:
@@ -1129,7 +1129,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                 }, 400)
                 return
             except Exception as e:
-                print(f"❌ Login endpoint error: {e}")
+                print(f"Login endpoint error: {e}")
                 self.send_json_response({
                     'success': False,
                     'error': str(e)
@@ -1228,13 +1228,13 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                                 'description': project_description
                             }
                         })
-                        print(f"✅ Project created: {project_id} - {project_name}")
+                        print(f"Project created: {project_id} - {project_name}")
                     else:
                         self.send_json_response({
                             'success': False,
                             'error': message
                         }, 400)
-                        print(f"❌ Failed to create project: {message}")
+                        print(f"Failed to create project: {message}")
                 else:
                     self.send_json_response({
                         'success': False,
@@ -1247,7 +1247,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                     'error': 'Invalid JSON in request body'
                 }, 400)
             except Exception as e:
-                print(f"❌ Project creation error: {e}")
+                print(f"Project creation error: {e}")
                 self.send_json_response({
                     'success': False,
                     'error': f'Project creation failed: {str(e)}'
@@ -1285,7 +1285,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                             'method': 'local_json',
                             'message': 'User created successfully in JSON file'
                         })
-                        print(f"✅ Created user in JSON: {username} ({email})")
+                        print(f"Created user in JSON: {username} ({email})")
                         return
                     else:
                         self.send_json_response({
@@ -1293,7 +1293,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                             'error': 'Failed to create user - user may already exist',
                             'method': 'local_json'
                         }, 400)
-                        print(f"❌ Failed to create user in JSON: {username}")
+                        print(f"Failed to create user in JSON: {username}")
                         return
 
                 else:
@@ -1310,7 +1310,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                 }, 400)
                 return
             except Exception as e:
-                print(f"❌ Create user error: {e}")
+                print(f"Create user error: {e}")
                 self.send_json_response({
                     'success': False,
                     'error': str(e)
@@ -1343,7 +1343,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                             'message': f'Role updated to {new_role}',
                             'method': 'local_json'
                         })
-                        print(f"✅ Updated user {user_id} role to {new_role} in JSON")
+                        print(f"Updated user {user_id} role to {new_role} in JSON")
                         return
                     else:
                         self.send_json_response({
@@ -1351,7 +1351,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                             'error': f'Failed to update user {user_id} role',
                             'method': 'local_json'
                         }, 500)
-                        print(f"❌ Failed to update user {user_id} role in JSON")
+                        print(f"Failed to update user {user_id} role in JSON")
                 else:
                     self.send_json_response({
                         'success': False,
@@ -1359,7 +1359,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                     }, 400)
 
             except Exception as e:
-                print(f"❌ Update user role error: {e}")
+                print(f"Update user role error: {e}")
                 self.send_json_response({
                     'success': False,
                     'error': str(e)
@@ -1393,7 +1393,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                             'message': f'Статус змінено на {status_text}',
                             'method': 'local_json'
                         })
-                        print(f"✅ Updated user {user_id} status to {status_text} in JSON")
+                        print(f"Updated user {user_id} status to {status_text} in JSON")
                         return
                     else:
                         self.send_json_response({
@@ -1401,7 +1401,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                             'error': f'Failed to update user {user_id} status',
                             'method': 'local_json'
                         }, 500)
-                        print(f"❌ Failed to update user {user_id} status in JSON")
+                        print(f"Failed to update user {user_id} status in JSON")
                 else:
                     self.send_json_response({
                         'success': False,
@@ -1409,7 +1409,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                     }, 400)
 
             except Exception as e:
-                print(f"❌ Toggle user status error: {e}")
+                print(f"Toggle user status error: {e}")
                 self.send_json_response({
                     'success': False,
                     'error': str(e)
@@ -1441,7 +1441,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                             'message': 'Користувач видалений',
                             'method': 'local_json'
                         })
-                        print(f"✅ Deleted user {user_id} from JSON file")
+                        print(f"Deleted user {user_id} from JSON file")
                         return
                     else:
                         self.send_json_response({
@@ -1449,7 +1449,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                             'error': f'Failed to delete user {user_id}',
                             'method': 'local_json'
                         }, 500)
-                        print(f"❌ Failed to delete user {user_id} from JSON file")
+                        print(f"Failed to delete user {user_id} from JSON file")
                 else:
                     self.send_json_response({
                         'success': False,
@@ -1457,7 +1457,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                     }, 400)
 
             except Exception as e:
-                print(f"❌ Delete user error: {e}")
+                print(f"Delete user error: {e}")
                 self.send_json_response({
                     'success': False,
                     'error': str(e)
@@ -1486,8 +1486,8 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                     project_id = unquote(path_parts[2])
 
                     # Create the task file
-                    print(f"🔄 Attempting to create task in project: {project_id}")
-                    print(f"🔄 Task data: {task_data}")
+                    print(f"Attempting to create task in project: {project_id}")
+                    print(f"Task data: {task_data}")
                     success = self.create_task_file(project_id, task_data)
 
                     if success:
@@ -1495,7 +1495,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                             'success': True,
                             'message': f'Task {task_data["id"]} created successfully'
                         })
-                        print(f"✅ Created task {task_data['id']} in project {project_id}")
+                        print(f"Created task {task_data['id']} in project {project_id}")
                     else:
                         self.send_json_response({
                             'success': False,
@@ -1512,7 +1512,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                     'success': False,
                     'error': str(e)
                 }, 500)
-                print(f"❌ Error creating task: {e}")
+                print(f"Error creating task: {e}")
 
         # Check if it's an image upload endpoint
         # Expected format: /api/projects/{project_id}/upload-image
@@ -1534,7 +1534,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                     'success': False,
                     'error': str(e)
                 }, 500)
-                print(f"❌ Error uploading image: {e}")
+                print(f"Error uploading image: {e}")
 
         # Select working directory endpoint
         elif parsed_path.path == '/api/select-directory':
@@ -1582,7 +1582,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                         'message': f'Working directory set to: {directory_path}',
                         'working_directory': directory_path
                     })
-                    print(f"✅ Working directory updated to: {directory_path}")
+                    print(f"Working directory updated to: {directory_path}")
                 else:
                     self.send_json_response({
                         'success': False,
@@ -1593,7 +1593,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                     'success': False,
                     'error': str(e)
                 }, 500)
-                print(f"❌ Error setting working directory: {e}")
+                print(f"Error setting working directory: {e}")
 
         # Admin update endpoint
         elif parsed_path.path == '/api/admin/update':
@@ -1629,7 +1629,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                         self.send_json_response({
                             'success': True
                         })
-                        print(f"✅ Updated app {app_id} status to {new_status}")
+                        print(f"Updated app {app_id} status to {new_status}")
                     else:
                         self.send_json_response({
                             'success': False,
@@ -1642,7 +1642,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                     }, 400)
 
             except Exception as e:
-                print(f"❌ Admin update error: {e}")
+                print(f"Admin update error: {e}")
                 self.send_json_response({
                     'success': False,
                     'error': str(e)
@@ -1695,7 +1695,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                     }, 400)
 
             except Exception as e:
-                print(f"❌ Admin delete error: {e}")
+                print(f"Admin delete error: {e}")
                 self.send_json_response({
                     'success': False,
                     'error': str(e)
@@ -1749,7 +1749,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                         'message': f'Directory created: {project_id}/{parent_dir}/{dir_name}',
                         'path': str(target_path)
                     })
-                    print(f"✅ Created directory: {target_path}")
+                    print(f"Created directory: {target_path}")
                     
                 else:
                     self.send_json_response({
@@ -1762,7 +1762,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                     'success': False,
                     'error': f'Error creating directory: {str(e)}'
                 }, 500)
-                print(f"❌ Error creating directory: {e}")
+                print(f"Error creating directory: {e}")
             return
 
         else:
@@ -1804,7 +1804,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                     break
 
         if not current_file:
-            print(f"❌ Task file not found: {task_id}")
+            print(f"Task file not found: {task_id}")
             return False
 
         # Determine new location based on task status
@@ -1845,7 +1845,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
             'created': task_data.get('created', datetime.now().isoformat()[:10])
         }
         
-        print(f"💾 mini-server: Writing frontmatter:")
+        print(f"mini-server: Writing frontmatter:")
         print(f"  estimate: {repr(frontmatter['estimate'])}")
         print(f"  spent_time: {repr(frontmatter['spent_time'])}")
 
@@ -1865,7 +1865,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         # Write updated content to new location
         new_task_file.write_text(file_content, encoding='utf-8')
-        print(f"💾 Updated task file: {new_task_file}")
+        print(f"Updated task file: {new_task_file}")
 
         return True
 
@@ -1882,7 +1882,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
             }
             success, error = self.project_manager.create_project(project_data)
             if not success:
-                print(f"❌ Failed to create project {project_id}: {error}")
+                print(f"Failed to create project {project_id}: {error}")
                 return False
 
         task_id = task_data['id']
@@ -1901,7 +1901,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         # Check if task file already exists
         if task_file.exists():
-            print(f"❌ Task file already exists: {task_file}")
+            print(f"Task file already exists: {task_file}")
             return False
 
         # Simple YAML dump function
@@ -1934,10 +1934,10 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
         # Write file content
         try:
             task_file.write_text(file_content, encoding='utf-8')
-            print(f"✅ Created task file: {task_file}")
+            print(f"Created task file: {task_file}")
             return True
         except Exception as e:
-            print(f"❌ Error writing task file {task_file}: {e}")
+            print(f"Error writing task file {task_file}: {e}")
             return False
     
     def handle_image_upload(self, project_id):
@@ -2008,7 +2008,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
             # Generate API path for markdown (accessible via web)
             api_path = f"/api/projects/{project_id}/images/{unique_filename}"
             
-            print(f"✅ Image uploaded: {file_path}")
+            print(f"Image uploaded: {file_path}")
             
             self.send_json_response({
                 'success': True,
@@ -2019,7 +2019,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
             })
             
         except Exception as e:
-            print(f"❌ Error saving image: {e}")
+            print(f"Error saving image: {e}")
             self.send_json_response({
                 'success': False,
                 'error': f'Failed to save image: {str(e)}'
@@ -2041,12 +2041,12 @@ if __name__ == '__main__':
     # Add persistent admin token on startup
     persistent_token = generate_persistent_token(ADMIN_PASSWORD)
     active_admin_tokens.add(persistent_token)
-    print(f"🔐 Persistent admin token ready: {persistent_token[:8]}...")
+    print(f"Persistent admin token ready: {persistent_token[:8]}...")
     
     # Check if port is available
     if not check_port_available(PORT):
-        print(f"❌ Port {PORT} is already in use!")
-        print("🔧 Try:")
+        print(f"Port {PORT} is already in use!")
+        print("Try:")
         print(f"   1. Stop existing process: kill $(lsof -ti:{PORT})")
         print(f"   2. Use different port: FIRA_PORT=8080 python3 mini-server.py")
         sys.exit(1)
@@ -2054,16 +2054,16 @@ if __name__ == '__main__':
     try:
         # Create projects directory if it doesn't exist
         os.makedirs(PROJECTS_BASE_DIR, exist_ok=True)
-        print(f"📁 Projects directory ensured: {PROJECTS_BASE_DIR}")
+        print(f"Projects directory ensured: {PROJECTS_BASE_DIR}")
         
         with socketserver.TCPServer(("", PORT), FiraRequestHandler) as httpd:
             print(f"""
-🚀 Mini Fira Server Starting...
+Mini Fira Server Starting...
 ===============================
-📁 Projects directory: {PROJECTS_BASE_DIR}
+Projects directory: {PROJECTS_BASE_DIR}
 🌐 Server URL: http://localhost:{PORT}
-🔧 API: http://localhost:{PORT}/api/
-📋 Clear cache: http://localhost:{PORT}/clear-cache.html
+API: http://localhost:{PORT}/api/
+Clear cache: http://localhost:{PORT}/clear-cache.html
 
 💡 Open http://localhost:{PORT} in your browser
 ⏹️  Press Ctrl+C to stop
@@ -2077,7 +2077,7 @@ if __name__ == '__main__':
             httpd.serve_forever()
             
     except KeyboardInterrupt:
-        print("\n🛑 Server stopped")
+        print("\nServer stopped")
     except Exception as e:
-        print(f"❌ Server error: {e}")
+        print(f"Server error: {e}")
         sys.exit(1)
