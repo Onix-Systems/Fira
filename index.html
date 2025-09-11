@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fira - Project Management</title>
+    <link rel="stylesheet" href="/style.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+
+    <!-- Early authentication check - runs before router -->
+    <script>
+        (function() {
+            
+            // Check if this is a web version that requires authentication
+            const isWebVersion = window.location.hostname.includes("onix-systems-android-tasks");
+            
+            if (!isWebVersion) {
+                console.log('🔓 Local version detected - skipping authentication');
+                return;
+            }
+            
+            // Function to check if user is logged in
+            function isUserLoggedIn() {
+                const loginData = localStorage.getItem('fira_login');
+                if (loginData) {
+                    try {
+                        const data = JSON.parse(loginData);
+                        const loginTime = new Date(data.loginTime);
+                        const now = new Date();
+                        const hoursDiff = (now - loginTime) / (1000 * 60 * 60);
+                        return hoursDiff < 24;
+                    } catch (e) {
+                        return false;
+                    }
+                }
+                return false;
+            }
+            
+            // Function to show login screen
+            function showLoginScreen() {
+                const appContent = document.getElementById('app-content');
+                if (appContent) {
+                    appContent.innerHTML = `
+                        <div class="loading-screen">
+                            <div class="loading-content" style="max-width: 400px;">
+                                <h1>Fira Login</h1>
+                                <form id="earlyLoginForm" style="text-align: left; margin-top: 30px;">
+                                    <div style="margin-bottom: 15px;">
+                                        <label style="display: block; color: white; margin-bottom: 5px; font-weight: 500;">Username</label>
+                                        <input type="text" id="earlyUsername" required 
+                                               style="width: 100%; padding: 12px; border-radius: 8px; border: none; font-size: 14px;">
+                                    </div>
+                                    <div style="margin-bottom: 20px;">
+                                        <label style="display: block; color: white; margin-bottom: 5px; font-weight: 500;">Password</label>
+                                        <input type="password" id="earlyPassword" required 
+                                               style="width: 100%; padding: 12px; border-radius: 8px; border: none; font-size: 14px;">
+                                    </div>
+                                    <button type="submit" class="btn-primary" style="width: 100%; padding: 12px; font-size: 16px;">
+                                        Login
+                                    </button>
+                                </form>
+                                <div id="earlyLoginError" style="color: #ff6b6b; margin-top: 15px; display: none; font-size: 14px;"></div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    setupEarlyLoginForm();
+                }
+            }
+            
+            // Setup login form handler
+            function setupEarlyLoginForm() {
+                const loginForm = document.getElementById('earlyLoginForm');
+                const loginError = document.getElementById('earlyLoginError');
+                
+                if (loginForm) {
+                    loginForm.addEventListener('submit', async (e) => {
+                        e.preventDefault();
+                        const username = document.getElementById('earlyUsername').value;
+                        const password = document.getElementById('earlyPassword').value;
+                        
+                        try {
+                            console.log('🔐 Early login attempt for user:', username);
+                            const response = await fetch('/api/auth/login', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ username, password })
+                            });
+                            
+                            const data = await response.json();
+                            
+                            if (data.success) {
+                                // Store login data
+                                localStorage.setItem('fira_login', JSON.stringify({
+                                    username: data.username,
+                                    role: data.role,
+                                    method: data.method,
+                                    loginTime: new Date().toISOString()
+                                }));
+                                
+                                console.log('✅ Early login successful');
+                                
+                                // Reload the page to continue with normal flow
+                                window.location.reload();
+                            } else {
+                                throw new Error(data.error || 'Login failed');
+                            }
+                        } catch (error) {
+                            console.error('❌ Early login error:', error);
+                            if (loginError) {
+                                loginError.textContent = error.message;
+                                loginError.style.display = 'block';
+                            }
+                        }
+                    });
+                }
+            }
+            
+            // Check authentication when DOM is ready (only for web versions)
+            if (isWebVersion) {
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', function() {
+                        // Only check auth for protected routes
+                        const path = window.location.pathname;
+                        const isProtectedRoute = path !== '/' && path !== '/login';
+
+                        if (isProtectedRoute && !isUserLoggedIn()) {
+                            console.log('🔐 Protected route accessed without login, showing login screen');
+                            showLoginScreen();
+                        }
+                    });
+                } else {
+                    // DOM already ready
+                    const path = window.location.pathname;
+                    const isProtectedRoute = path !== '/' && path !== '/login';
+
+                    if (isProtectedRoute && !isUserLoggedIn()) {
+                        console.log('🔐 Protected route accessed without login, showing login screen');
+                        showLoginScreen();
+                    }
+                }
+            }
+        })();
+    </script>
+
+    <script src="/auth-check.js"></script>
+    <script src="/check-login.js"></script>
+    <script src="/projects-data.js"></script>
+    <script src="/file-system.js"></script>
+    <script src="/jquery-file-loader.js"></script>
+    <script src="/real-filesystem-loader.js"></script>
+    <script src="/auto-projects-scanner.js"></script>
+    <script src="/api-client.js"></script>
+    <script src="/loading-manager.js"></script>
+    <script src="/global-data.js"></script>
+    <script src="/router.js"></script>
+    <script src="/script.js?v=2.1"></script>
+</head>
+<body>
+<!-- Logout button (shown only when logged in) -->
+<div id="logout-container" style="position: fixed; top: 10px; right: 10px; z-index: 1000; display: none;">
+    <button onclick="logoutUser()" style="
+            background: #dc2626;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            margin-bottom: 8px;
+        ">Logout</button>
+    <!-- Reset mode button (localhost only) -->
+    <div id="reset-mode-container" style="display: none;">
+        <button onclick="resetModeChoice()" style="
+                background: #f59e0b;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 12px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            ">Reset Mode</button>
+    </div>
+</div>
+
+<!-- Main app container where pages will be loaded -->
+<div id="app-content">
+    <!-- Content will be loaded dynamically by router -->
+    <div class="loading-screen">
+        <div class="loading-content">
+            <h1>Fira</h1>
+            <p>Loading...</p>
+        </div>
+    </div>
+</div>
+
+<!-- Global styles for router -->
+<style>
+    .loading-screen {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        background: white;
+    }
+    .loading-content {
+        text-align: center;
+        color: #333;
+    }
+
+    .loading-content h1 {
+        font-size: 48px;
+        font-weight: 600;
+        margin-bottom: 16px;
+        color: #8b5cf6;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .loading-content p {
+        font-size: 18px;
+        opacity: 0.8;
+    }
+
+    .error-page {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        background: white;
+        padding: 20px;
+    }
+
+    .error-content {
+        background: white;
+        padding: 40px;
+        border-radius: 12px;
+        text-align: center;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+        max-width: 500px;
+        width: 100%;
+    }
+
+    .error-content h1 {
+        color: #dc2626;
+        margin-bottom: 16px;
+        font-size: 24px;
+    }
+
+    .error-content p {
+        color: #6b7280;
+        margin-bottom: 24px;
+        font-size: 16px;
+    }
+
+    .btn-primary {
+        background: #8b5cf6;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 12px 24px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .btn-primary:hover {
+        background: #7c3aed;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+    }
+</style>
+
+<!-- Router initialization is handled in router.js -->
+
+<script>
+    // Show logout button if user is logged in
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(function() {
+            // Only show logout button for web version
+            const isWebVersion = window.location.hostname.includes("onix-systems-android-tasks");
+            
+            if (isWebVersion && window.isUserLoggedIn && window.isUserLoggedIn()) {
+                const logoutContainer = document.getElementById('logout-container');
+                if (logoutContainer) {
+                    logoutContainer.style.display = 'block';
+                    console.log('🔐 Showing logout button');
+                }
+            }
+        }, 100);
+    });
+</script>
+</body>
+</html>

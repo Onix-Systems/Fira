@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fira - Project Dashboard</title>
+    <link rel="stylesheet" href="../style.css">
+    <script src="../projects-data.js"></script>
+    <script src="../file-system.js"></script>
+    <script src="../api-client.js"></script>
+    <script src="../global-data.js"></script>
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header inside main-content -->
+            <header class="header">
+                <div class="header-content">
+                    <div class="logo-section">
+                        <h1 class="logo">Fira</h1>
+                        <div class="header-left-controls">
+                            <div class="search-container">
+                                <svg class="search-icon" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"></path>
+                                </svg>
+                                <input type="text" class="search-input" placeholder="Search" id="searchInput">
+                            </div>
+                            
+                            <div class="name-dropdown">
+                                <select id="nameFilter">
+                                    <option value="">Name</option>
+                                    <option value="a-z">A-Z</option>
+                                    <option value="z-a">Z-A</option>
+                                    <option value="recent">Most Recent</option>
+                                </select>
+                                <svg class="dropdown-arrow" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                                </svg>
+                            </div>
+                        </div>
+                
+                    </div>
+                    
+                    <div class="header-controls">
+                        <button class="new-project-btn" id="newProjectBtn">New Project</button>
+                    </div>
+                </div>
+            </header>
+            
+            <div class="projects-grid" id="projectsGrid">
+                <!-- Project cards will be dynamically generated -->
+            </div>
+        </main>
+    </div>
+
+    <!-- New Project Modal -->
+    <div class="modal" id="newProjectModal" style="display: none;">
+        <div class="modal-content create-project-modal">
+            <div class="modal-header">
+                <h2>Create New Project</h2>
+                <button class="modal-close" onclick="closeModal()" type="button">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <form id="createProjectForm" class="project-form">
+                <div class="form-group">
+                    <label for="projectName" class="form-label">Project Name *</label>
+                    <input 
+                        type="text" 
+                        id="projectName" 
+                        name="projectName"
+                        class="form-input" 
+                        placeholder="Enter project name..."
+                        required
+                        maxlength="100"
+                    />
+                    <div class="form-error" id="projectNameError"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="projectId" class="form-label">Project ID <span style="color: #dc2626;">*</span></label>
+                    <input 
+                        type="text" 
+                        id="projectId" 
+                        name="projectId"
+                        class="form-input" 
+                        placeholder="e.g., KSP, PROJ, APP"
+                        required
+                        maxlength="10"
+                        pattern="[A-Z][A-Z0-9]*"
+                        title="Must start with a letter and contain only uppercase letters and numbers"
+                        style="text-transform: uppercase;"
+                    />
+                    <div class="form-help">Used for task IDs (e.g., KSP-001, KSP-002). Max 10 characters, uppercase letters and numbers only.</div>
+                    <div class="form-error" id="projectIdError"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="projectDescription" class="form-label">Project Description</label>
+                    <textarea 
+                        id="projectDescription" 
+                        name="projectDescription"
+                        class="form-textarea" 
+                        placeholder="Describe your project..."
+                        rows="4"
+                        maxlength="500"
+                    ></textarea>
+                    <div class="character-count">
+                        <span id="descriptionCharCount">0</span>/500 characters
+                    </div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn-cancel" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn-create" id="createProjectBtn">
+                        <span class="btn-text">Create Project</span>
+                        <div class="btn-loading" style="display: none;">
+                            <div class="loading-spinner"></div>
+                            Creating...
+                        </div>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Project Modal -->
+    <div class="modal" id="editProjectModal" style="display: none;">
+        <div class="modal-content edit-project-modal">
+            <div class="modal-header">
+                <h2>Project details</h2>
+                <button class="modal-close" onclick="closeEditProjectModal()" type="button">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <form id="editProjectForm" class="project-form">
+                <div class="form-group">
+                    <label for="editProjectName" class="form-label">Name *</label>
+                    <input 
+                        type="text" 
+                        id="editProjectName" 
+                        name="editProjectName"
+                        class="form-input" 
+                        placeholder="Enter project name..."
+                        required
+                        maxlength="100"
+                    />
+                    <div class="form-error" id="editProjectNameError"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="editProjectDescription" class="form-label">Description</label>
+                    <textarea 
+                        id="editProjectDescription" 
+                        name="editProjectDescription"
+                        class="form-textarea" 
+                        placeholder="Describe your project..."
+                        rows="6"
+                        maxlength="1000"
+                    ></textarea>
+                    <div class="form-error" id="editProjectDescriptionError"></div>
+                    <div class="character-count">
+                        <span id="editDescriptionCharCount">0</span>/1000 characters
+                    </div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn-cancel" onclick="closeEditProjectModal()">Close</button>
+                    <button type="submit" class="btn-save" id="saveProjectBtn">
+                        <span class="btn-text">Save</span>
+                        <div class="btn-loading" style="display: none;">
+                            <div class="loading-spinner"></div>
+                            Saving...
+                        </div>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal" id="deleteProjectModal" style="display: none;" role="dialog" aria-labelledby="deleteModalTitle" aria-describedby="deleteModalDescription">
+        <div class="modal-content delete-project-modal">
+            <div class="delete-modal-icon">
+                <svg class="warning-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 01.75.75v3.75a.75.75 0 01-1.5 0V9a.75.75 0 01.75-.75zm0 8.25a.75.75 0 100-1.5.75.75 0 000 1.5z" clip-rule="evenodd" />
+                </svg>
+            </div>
+            
+            <div class="delete-modal-content">
+                <h2 id="deleteModalTitle" class="delete-modal-title">
+                    Delete project '<span id="deleteProjectName"></span>'?
+                </h2>
+                
+                <div id="deleteModalDescription" class="delete-modal-description">
+                    <p class="delete-warning-text">This action is irreversible.</p>
+                    <p class="delete-subtext">All project data will be lost.</p>
+                </div>
+                
+                <div class="delete-modal-actions">
+                    <button type="button" class="btn-cancel" onclick="closeDeleteProjectModal()" id="cancelDeleteBtn">
+                        Cancel
+                    </button>
+                    <button type="button" class="btn-delete" id="confirmDeleteBtn">
+                        <span class="btn-text">Delete</span>
+                        <div class="btn-loading" style="display: none;">
+                            <div class="loading-spinner"></div>
+                            Deleting...
+                        </div>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="../script.js"></script>
+    
+    <!-- Header scroll behavior for standalone dashboard -->
+    <script>
+        function initHeaderScrollBehavior() {
+            const header = document.querySelector('.header');
+            const mainContent = document.querySelector('.main-content');
+            let isScrolled = false;
+            
+            console.log('Initializing header scroll behavior...', {header, mainContent});
+            
+            if (!header || !mainContent) {
+                console.error('Header or main-content element not found!');
+                return;
+            }
+            
+            function handleScroll() {
+                const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+                const shouldBeScrolled = scrollTop > 50;
+                
+                if (shouldBeScrolled !== isScrolled) {
+                    isScrolled = shouldBeScrolled;
+                    console.log('Header state changing:', {scrollTop, shouldBeScrolled});
+                    
+                    if (isScrolled) {
+                        header.classList.add('scrolled');
+                        mainContent.classList.add('header-scrolled');
+                        console.log('Header expanded (scrolled)');
+                    } else {
+                        header.classList.remove('scrolled');
+                        mainContent.classList.remove('header-scrolled');
+                        console.log('Header contained (not scrolled)');
+                    }
+                }
+            }
+            
+            let ticking = false;
+            function throttledScroll() {
+                if (!ticking) {
+                    requestAnimationFrame(() => {
+                        handleScroll();
+                        ticking = false;
+                    });
+                    ticking = true;
+                }
+            }
+            
+            window.addEventListener('scroll', throttledScroll, { passive: true });
+        }
+        
+        // Initialize scroll behavior when DOM is loaded
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initHeaderScrollBehavior);
+        } else {
+            initHeaderScrollBehavior();
+        }
+    </script>
+</body>
+</html>

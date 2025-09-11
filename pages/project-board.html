@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Board - Fira</title>
+    <link rel="stylesheet" href="../style.css">
+    <link rel="stylesheet" href="../project-board.css">
+    <script src="../projects-data.js"></script>
+    <script src="../file-system.js"></script>
+    <script src="../global-data.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="project-board">
+        <!-- Header -->
+        <header class="board-header">
+            <div class="board-header-content">
+                <!-- Left section: Back button and project name -->
+                <div class="board-header-left">
+                    <button class="back-button" id="backButton">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                        </svg>
+                    </button>
+                    
+                    <div class="project-title">
+                        <h1 id="projectName">Project Name</h1>
+                    </div>
+                </div>
+
+                <!-- Right section: Action buttons -->
+                <div class="board-header-right">
+                    <div class="view-toggle">
+                        <button class="toggle-btn analytics-btn" id="analyticsBtn">Analytics</button>
+                        <button class="toggle-btn view-switch-btn active" id="viewSwitchBtn">List View</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filters section -->
+            <div class="board-filters">
+                <div class="board-filters-content">
+                    <div class="board-filters-left">
+                        <div class="search-container">
+                            <svg class="search-icon" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"></path>
+                            </svg>
+                            <input type="text" class="search-input" placeholder="Search tasks..." id="taskSearchInput">
+                        </div>
+                        
+                        <div class="developer-dropdown">
+                            <select id="developerFilter">
+                                <option value="">Developer</option>
+                                <option value="all">All Developers</option>
+                                <option value="unassigned">Unassigned</option>
+                                <!-- Developer options loaded dynamically by JavaScript -->
+                            </select>
+                            <svg class="dropdown-arrow" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                            </svg>
+                        </div>
+                        
+                        <button class="add-developer-btn" id="addDeveloperBtn" title="Add new developer">
+                            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M8 9a3 3 0 100-6 3 3 0 000 6zM8 11a6 6 0 016 6H2a6 6 0 016-6zM16 7a1 1 0 10-2 0v1h-1a1 1 0 100 2h1v1a1 1 0 102 0v-1h1a1 1 0 100-2h-1V7z"></path>
+                            </svg>
+                            Add Developer
+                        </button>
+                    </div>
+                    
+                    <button class="create-task-btn" id="createTaskBtn">
+                        <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"></path>
+                        </svg>
+                        Create
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Kanban Board -->
+        <main class="kanban-board" id="kanbanBoard">
+            <div class="kanban-columns">
+                <!-- Backlog Column -->
+                <div class="kanban-column" data-column="backlog">
+                    <div class="figma-column-header">
+                        <h3 class="figma-column-title">Backlog</h3>
+                        <div class="figma-task-count">
+                            <span class="figma-count-number" id="backlogCount">0</span>
+                        </div>
+                    </div>
+                    <div class="column-content" data-column="backlog">
+                        <!-- Task cards will be inserted here -->
+                    </div>
+                </div>
+
+                <!-- In Progress Column -->
+                <div class="kanban-column" data-column="progress">
+                    <div class="figma-column-header">
+                        <h3 class="figma-column-title">In Progress</h3>
+                        <div class="figma-task-count">
+                            <span class="figma-count-number" id="progressCount">0</span>
+                        </div>
+                    </div>
+                    <div class="column-content" data-column="progress">
+                        <!-- Task cards will be inserted here -->
+                    </div>
+                </div>
+
+                <!-- Review Column -->
+                <div class="kanban-column" data-column="review">
+                    <div class="figma-column-header">
+                        <h3 class="figma-column-title">Review</h3>
+                        <div class="figma-task-count">
+                            <span class="figma-count-number" id="reviewCount">0</span>
+                        </div>
+                    </div>
+                    <div class="column-content" data-column="review">
+                        <!-- Task cards will be inserted here -->
+                    </div>
+                </div>
+
+                <!-- Testing Column -->
+                <div class="kanban-column" data-column="testing">
+                    <div class="figma-column-header">
+                        <h3 class="figma-column-title">Testing</h3>
+                        <div class="figma-task-count">
+                            <span class="figma-count-number" id="testingCount">0</span>
+                        </div>
+                    </div>
+                    <div class="column-content" data-column="testing">
+                        <!-- Task cards will be inserted here -->
+                    </div>
+                </div>
+
+                <!-- Done Column -->
+                <div class="kanban-column" data-column="done">
+                    <div class="figma-column-header">
+                        <h3 class="figma-column-title">Done</h3>
+                        <div class="figma-task-count">
+                            <span class="figma-count-number" id="doneCount">0</span>
+                        </div>
+                    </div>
+                    <div class="column-content" data-column="done">
+                        <!-- Task cards will be inserted here -->
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- List View -->
+        <main class="list-view" id="listView" style="display: none;">
+            <div class="list-container">
+                <div class="table-wrapper">
+                    <!-- Custom Header -->
+                    <div class="tasks-table-header">
+                        <div class="header-cell header-key">Key</div>
+                        <div class="header-cell header-times">Times</div>
+                        <div class="header-cell header-task-name">Task name</div>
+                        <div class="header-cell header-status">Status</div>
+                        <div class="header-cell header-assignee">Assignee</div>
+                        <div class="header-cell header-priority">Priority</div>
+                        
+                        <!-- Separator lines -->
+                        <div class="separator sep-1"></div>
+                        <div class="separator sep-2"></div>
+                        <div class="separator sep-3"></div>
+                        <div class="separator sep-4"></div>
+                        <div class="separator sep-5"></div>
+                    </div>
+                    
+                    <!-- Task Rows Container -->
+                    <div class="tasks-rows-container" id="tasksRowsContainer">
+                        <!-- Task row cards will be inserted here dynamically -->
+                    </div>
+                    
+                    <!-- Hidden table for compatibility -->
+                    <table class="tasks-table" id="tasksTable" style="display: none;">
+                        <thead>
+                            <tr>
+                                <th class="sortable" data-column="id">
+                                    <span>Key</span>
+                                    <svg class="sort-icon" viewBox="0 0 20 20" fill="currentColor">
+                                        <path d="M5 12a1 1 0 102 0V6.414l1.293 1.293a1 1 0 001.414-1.414l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L5 6.414V12zM15 8a1 1 0 10-2 0v5.586l-1.293-1.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L15 13.586V8z"/>
+                                    </svg>
+                                </th>
+                                <th class="sortable" data-column="time">
+                                    <span>Times</span>
+                                    <svg class="sort-icon" viewBox="0 0 20 20" fill="currentColor">
+                                        <path d="M5 12a1 1 0 102 0V6.414l1.293 1.293a1 1 0 001.414-1.414l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L5 6.414V12zM15 8a1 1 0 10-2 0v5.586l-1.293-1.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L15 13.586V8z"/>
+                                    </svg>
+                                </th>
+                                <th class="sortable" data-column="title">
+                                    <span>Task name</span>
+                                    <svg class="sort-icon" viewBox="0 0 20 20" fill="currentColor">
+                                        <path d="M5 12a1 1 0 102 0V6.414l1.293 1.293a1 1 0 001.414-1.414l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L5 6.414V12zM15 8a1 1 0 10-2 0v5.586l-1.293-1.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L15 13.586V8z"/>
+                                    </svg>
+                                </th>
+                                <th class="sortable" data-column="status">
+                                    <span>Status</span>
+                                    <svg class="sort-icon" viewBox="0 0 20 20" fill="currentColor">
+                                        <path d="M5 12a1 1 0 102 0V6.414l1.293 1.293a1 1 0 001.414-1.414l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L5 6.414V12zM15 8a1 1 0 10-2 0v5.586l-1.293-1.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L15 13.586V8z"/>
+                                    </svg>
+                                </th>
+                                <th class="sortable" data-column="assignee">
+                                    <span>Assignee</span>
+                                    <svg class="sort-icon" viewBox="0 0 20 20" fill="currentColor">
+                                        <path d="M5 12a1 1 0 102 0V6.414l1.293 1.293a1 1 0 001.414-1.414l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L5 6.414V12zM15 8a1 1 0 10-2 0v5.586l-1.293-1.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L15 13.586V8z"/>
+                                    </svg>
+                                </th>
+                                <th class="sortable" data-column="priority">
+                                    <span>Priority</span>
+                                    <svg class="sort-icon" viewBox="0 0 20 20" fill="currentColor">
+                                        <path d="M5 12a1 1 0 102 0V6.414l1.293 1.293a1 1 0 001.414-1.414l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L5 6.414V12zM15 8a1 1 0 10-2 0v5.586l-1.293-1.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L15 13.586V8z"/>
+                                    </svg>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody id="tasksTableBody">
+                            <!-- Table rows will be inserted here dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Infinite scroll info -->
+                <div class="scroll-info" id="scrollInfo" style="
+                    text-align: center;
+                    padding: 16px;
+                    color: #6b7280;
+                    font-size: 14px;
+                ">
+                    <span id="taskCount">0 tasks</span>
+                </div>
+            </div>
+        </main>
+
+        <!-- Analytics View -->
+        <div class="analytics-view hidden" id="analyticsView">
+            <!-- Key Metrics Section -->
+            <div class="project-metrics">
+                <div class="metrics-grid">
+                    <div class="metric-card backlog">
+                        <div class="metric-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+                            </svg>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-value" id="projectBacklogCount">0</div>
+                            <div class="metric-label">Backlog Tasks</div>
+                        </div>
+                    </div>
+                    
+                    <div class="metric-card progress">
+                        <div class="metric-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                            </svg>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-value" id="projectProgressCount">0</div>
+                            <div class="metric-label">In Progress</div>
+                        </div>
+                    </div>
+                    
+                    <div class="metric-card done">
+                        <div class="metric-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/>
+                            </svg>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-value" id="projectDoneCount">0</div>
+                            <div class="metric-label">Completed</div>
+                        </div>
+                    </div>
+                    
+                    <div class="metric-card velocity">
+                        <div class="metric-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-value" id="projectVelocityValue">0</div>
+                            <div class="metric-label">Tasks/Week</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts and Analytics Content -->
+            <div class="analytics-content">
+                <div class="analytics-left">
+                    <!-- Team Performance Chart -->
+                    <div class="chart-section">
+                        <div class="chart-header">
+                            <h3>Team Performance</h3>
+                            <div class="chart-controls">
+                                <button class="chart-toggle active" data-chart="velocity">Velocity</button>
+                                <button class="chart-toggle" data-chart="burndown">Burndown</button>
+                                <button class="chart-toggle" data-chart="distribution">Distribution</button>
+                            </div>
+                        </div>
+                        
+                        <div class="chart-container">
+                            <div class="chart-wrapper" id="projectVelocityChart">
+                                <canvas id="projectTeamVelocityChart"></canvas>
+                            </div>
+                            
+                            <div class="chart-wrapper hidden" id="projectBurndownChart">
+                                <canvas id="projectBurndownCanvas"></canvas>
+                            </div>
+                            
+                            <div class="chart-wrapper hidden" id="projectDistributionChart">
+                                <canvas id="projectTaskDistributionChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Time Tracking Overview -->
+                    <div class="time-overview-section">
+                        <h3>Time Tracking</h3>
+                        <div class="time-cards">
+                            <div class="time-summary-card planned">
+                                <div class="time-icon">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm4.2 14.2L11 13V7h1.5v5.2l4.5 2.7-.8 1.3z"/>
+                                    </svg>
+                                </div>
+                                <div class="time-content">
+                                    <div class="time-value" id="projectTotalPlanned">0h</div>
+                                    <div class="time-label">Planned</div>
+                                </div>
+                            </div>
+                            
+                            <div class="time-summary-card spent">
+                                <div class="time-icon">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm3.5 6L12 10.5 8.5 8 12 5.5 15.5 8z"/>
+                                    </svg>
+                                </div>
+                                <div class="time-content">
+                                    <div class="time-value" id="projectTotalSpent">0h</div>
+                                    <div class="time-label">Spent</div>
+                                </div>
+                            </div>
+                            
+                            <div class="time-summary-card efficiency">
+                                <div class="time-icon">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M3.5 18.5L5 17l6 6-1.5 1.5-6-6zM20.5 5.5L19 7l-6-6 1.5-1.5 6 6zM12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4z"/>
+                                    </svg>
+                                </div>
+                                <div class="time-content">
+                                    <div class="time-value" id="projectEfficiency">100%</div>
+                                    <div class="time-label">Efficiency</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="analytics-right">
+                    <!-- Developer Statistics -->
+                    <div class="developer-stats-section">
+                        <h3>Developer Performance</h3>
+                        <div class="developer-list" id="projectDeveloperList">
+                            <!-- Developer items will be generated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Progress Overview -->
+                    <div class="progress-overview">
+                        <h3>Project Progress</h3>
+                        <div class="progress-item">
+                            <div class="progress-label">Overall Completion</div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="projectProgress" style="width: 0%"></div>
+                            </div>
+                            <div class="progress-percentage" id="projectProgressPercentage">0%</div>
+                        </div>
+                        
+                        <div class="progress-stats">
+                            <div class="stat-item">
+                                <div class="stat-number" id="tasksCompleted">0</div>
+                                <div class="stat-label">Completed</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="stat-number" id="tasksRemaining">0</div>
+                                <div class="stat-label">Remaining</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Task Detail Modal -->
+    <div class="modal task-detail-modal" id="taskDetailModal" style="display: none;">
+        <div class="task-modal-backdrop"></div>
+        <div class="task-modal-container">
+            <!-- Modal Header -->
+            <div class="task-modal-header">
+                <div class="task-modal-nav">
+                    <button class="back-button" onclick="closeTaskModal()">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                        </svg>
+                    </button>
+                    <div class="breadcrumb" id="taskBreadcrumb">
+                        Project Name / KMP-123
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Content -->
+            <div class="task-modal-content">
+                
+                <!-- Task Info Panel -->
+                <div class="task-info-panel">
+                    <div class="info-left">
+                        <div class="info-item">
+                            <span class="info-text">Assignee: </span>
+                            <div class="assignee-dropdown" id="assigneeDropdown">
+                                <div class="dropdown-selected" id="dropdownSelected">
+                                    <span class="selected-value">Dev-Bohdan</span>
+                                    <svg width="12" height="8" viewBox="0 0 12 8" fill="currentColor" class="dropdown-arrow">
+                                        <path d="M1 1.5L6 6.5L11 1.5"/>
+                                    </svg>
+                                </div>
+                                <div class="dropdown-menu" id="dropdownMenu">
+                                    <div class="dropdown-option" data-value="Dev-Bohdan">Dev-Bohdan</div>
+                                    <div class="dropdown-option" data-value="Dev-Anna">Dev-Anna</div>
+                                    <div class="dropdown-option" data-value="Dev-Max">Dev-Max</div>
+                                    <div class="dropdown-option" data-value="Dev-Kate">Dev-Kate</div>
+                                    <div class="dropdown-option" data-value="Unassigned">Unassigned</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-text">Priority: </span>
+                            <div class="priority-dropdown">
+                                <select id="taskPrioritySelect" class="priority-select">
+                                    <option value="low">Low</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="high">High</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-text">Status: </span>
+                            <div class="status-dropdown">
+                                <select id="taskStatusSelect" class="status-select">
+                                    <option value="backlog">Backlog</option>
+                                    <option value="progress">In Progress</option>
+                                    <option value="review">Review</option>
+                                    <option value="testing">Testing</option>
+                                    <option value="done">Done</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-text">Created: </span>
+                            <span class="info-value created-badge">10.10.2020</span>
+                        </div>
+                        <div class="time-tracking-section">
+                            <span class="info-text">Time Tracking: </span>
+                            <div class="progress-wrapper">
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: 25%;"></div>
+                                </div>
+                                <div class="time-labels">
+                                    <span class="time-spent">1h</span>
+                                    <span class="time-remaining">3h remaining</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="info-right">
+                        <!-- Right section is now empty but preserved for future use -->
+                    </div>
+                </div>
+
+                <!-- Task Name Field -->
+                <div class="task-name-field">
+                    <label class="field-label">Task name</label>
+                    <input 
+                        type="text" 
+                        class="task-name-input" 
+                        id="taskNameInput" 
+                        value=""
+                        placeholder="Enter task name..."
+                    />
+                </div>
+
+                <!-- Description Section -->
+                <div class="description-section">
+                    <div class="description-header">
+                        <label class="field-label">Description:</label>
+                        <div class="edit-preview-buttons">
+                            <button class="mode-btn" id="editModeBtn">Edit</button>
+                            <button class="mode-btn active" id="previewModeBtn">Preview</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Editor Toolbar -->
+                    <div class="editor-toolbar" id="editorToolbar" style="display: none;">
+                        <button class="toolbar-btn" data-command="bold" title="Bold"><strong>B</strong></button>
+                        <button class="toolbar-btn" data-command="italic" title="Italic"><em>I</em></button>
+                        <button class="toolbar-btn" data-command="code" title="Code">&lt;/&gt;</button>
+                        <button class="toolbar-btn" data-command="h1" title="Heading 1">H1</button>
+                        <button class="toolbar-btn" data-command="h2" title="Heading 2">H2</button>
+                        <button class="toolbar-btn" data-command="h3" title="Heading 3">H3</button>
+                        <button class="toolbar-btn" data-command="ul" title="Bullet List">• List</button>
+                        <button class="toolbar-btn" data-command="ol" title="Numbered List">1. List</button>
+                        <button class="toolbar-btn" data-command="quote" title="Quote">❝ Quote</button>
+                        <button class="toolbar-btn" data-command="link" title="Link">🔗</button>
+                        <button class="toolbar-btn" data-command="image" title="Image">🖼️</button>
+                    </div>
+                    
+                    <!-- Text Content Area -->
+                    <div class="text-content-area">
+                        <div id="taskDescriptionPreview" class="description-preview">
+                            
+                        </div>
+                        <textarea 
+                            id="taskDescriptionEditor" 
+                            class="description-editor" 
+                            placeholder="Enter task description..."
+                            style="display: none;"
+                        ></textarea>
+                    </div>
+                    
+                    <!-- Image Upload Area -->
+                    <div class="image-drop-zone">
+                        <p>Drop an image here or <span class="upload-link">click to select</span></p>
+                        <input type="file" id="imageUpload" accept="image/*" style="display: none;">
+                    </div>
+                    
+                    <!-- Activities Section -->
+                    <div class="activities-section">
+                        <div class="activities-header">
+                            <h3>Activities</h3>
+                        </div>
+                        
+                        <!-- Add Comment Form -->
+                        <div class="add-comment-section">
+                            <textarea id="newCommentInput" class="comment-input" placeholder="Add a comment..." rows="3"></textarea>
+                            <button type="button" id="addCommentBtn" class="add-comment-btn">Add Comment</button>
+                        </div>
+                        
+                        <div class="activities-list" id="activitiesList">
+                            <!-- Activities will be populated by JavaScript -->
+                            <div class="no-activities">No activities found</div>
+                        </div>
+                    </div>
+                </div>
+
+                </div>
+
+                <!-- Hidden fields for JavaScript compatibility -->
+                <div style="display: none;">
+                    <select id="taskAssignee">
+                        <option value="">Unassigned</option>
+                        <option value="dev-bohdan">Dev-Bohdan</option>
+                        <option value="dev-mykola">Dev-Mykola</option>
+                        <option value="tech-ruslan">Tech-Ruslan</option>
+                    </select>
+                    <input type="text" id="taskEstimate" />
+                    <input type="date" id="taskCreated" />
+                    <input type="text" id="taskTimeSpent" />
+                    <select id="taskPriority">
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                    </select>
+                    <div class="task-type-buttons">
+                        <button class="type-btn active" data-type="task" id="taskTypeTask">Task</button>
+                        <button class="type-btn" data-type="bug" id="taskTypeBug">Bug</button>
+                    </div>
+                    <div id="timeRemaining"></div>
+                    <div id="timeProgress"></div>
+                    <div id="activityFeed"></div>
+                    <span id="charCount">0</span>
+                    <textarea id="commentInput"></textarea>
+                </div>
+
+            </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Task Modal -->
+    <div class="modal" id="createTaskModal" style="display: none;">
+        <div class="modal-content create-task-modal">
+            <div class="modal-header">
+                <h2>Create New Task</h2>
+                <button class="modal-close" onclick="closeCreateTaskModal()">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="createTaskForm">
+                    <div class="form-group">
+                        <label for="newTaskId" class="form-label">Task ID</label>
+                        <input 
+                            type="text" 
+                            id="newTaskId" 
+                            name="taskId"
+                            class="form-input" 
+                            readonly
+                            placeholder="Will be auto-generated"
+                        />
+                        <div class="form-help">Auto-generated based on project ID</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="newTaskTitle" class="form-label">Task Title <span style="color: #dc2626;">*</span></label>
+                        <input 
+                            type="text" 
+                            id="newTaskTitle" 
+                            name="taskTitle"
+                            class="form-input" 
+                            placeholder="Enter task title..."
+                            required
+                        />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="newTaskColumn" class="form-label">Status</label>
+                        <select id="newTaskColumn" name="taskColumn" class="form-input">
+                            <option value="backlog">Backlog</option>
+                            <option value="progress">In Progress</option>
+                            <option value="review">Review</option>
+                            <option value="testing">Testing</option>
+                            <option value="done">Done</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="newTaskAssignee" class="form-label">Assignee</label>
+                        <select id="newTaskAssignee" name="taskAssignee" class="form-input">
+                            <option value="">Unassigned</option>
+                            <!-- Developer options loaded dynamically by JavaScript -->
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="newTaskPriority" class="form-label">Priority</label>
+                        <select id="newTaskPriority" name="taskPriority" class="form-input">
+                            <option value="low">Low</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="high">High</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="newTaskEstimate" class="form-label">Time Estimate</label>
+                        <input 
+                            type="text" 
+                            id="newTaskEstimate" 
+                            name="taskEstimate"
+                            class="form-input" 
+                            placeholder="e.g., 2h, 1d, 30m"
+                            value="2h"
+                        />
+                        <div class="form-help">Use format like: 2h (hours), 30m (minutes), 1d (days)</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="newTaskDescription" class="form-label">Description</label>
+                        <textarea 
+                            id="newTaskDescription" 
+                            name="taskDescription"
+                            class="form-textarea" 
+                            placeholder="Describe the task..."
+                            rows="4"
+                        ></textarea>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn-cancel" onclick="closeCreateTaskModal()">Cancel</button>
+                        <button type="submit" class="btn-create" id="createTaskSubmitBtn">
+                            <span class="btn-text">Create Task</span>
+                            <div class="btn-loading" style="display: none;">
+                                <div class="loading-spinner"></div>
+                                Creating...
+                            </div>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Task Full Screen (Exact copy of taskDetailModal for task creation) -->
+    <div class="modal create-task-fullscreen" id="createTaskDetailModal" style="display: none;">
+        <div class="task-modal-backdrop"></div>
+        <div class="task-modal-container">
+            <!-- Modal Header -->
+            <div class="task-modal-header">
+                <div class="task-modal-nav">
+                    <button class="back-button" onclick="closeCreateTaskDetailModal()">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                        </svg>
+                    </button>
+                    <div class="breadcrumb" id="createTaskBreadcrumb">
+                        New Task
+                    </div>
+                    <!-- Create Button in Nav -->
+                    <button class="create-task-nav-btn" id="createTaskNavBtn" onclick="createNewTaskFromModal()">
+                        Create
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Content -->
+            <div class="task-modal-content">
+                
+                <!-- Task Info Panel -->
+                <div class="task-info-panel">
+                    <div class="info-left">
+                        <div class="info-item">
+                            <span class="info-text">Assignee: </span>
+                            <div class="assignee-dropdown" id="createAssigneeDropdown">
+                                <div class="dropdown-selected" id="createDropdownSelected">
+                                    <span class="selected-value">Unassigned</span>
+                                    <svg width="12" height="8" viewBox="0 0 12 8" fill="currentColor" class="dropdown-arrow">
+                                        <path d="M1 1.5L6 6.5L11 1.5"/>
+                                    </svg>
+                                </div>
+                                <div class="dropdown-menu" id="createDropdownMenu">
+                                    <div class="dropdown-option" data-value="Unassigned">Unassigned</div>
+                                    <div class="dropdown-option" data-value="Dev-Bohdan">Dev-Bohdan</div>
+                                    <div class="dropdown-option" data-value="Dev-Anna">Dev-Anna</div>
+                                    <div class="dropdown-option" data-value="Dev-Max">Dev-Max</div>
+                                    <div class="dropdown-option" data-value="Dev-Kate">Dev-Kate</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-text">Priority: </span>
+                            <div class="priority-dropdown">
+                                <select id="createTaskPrioritySelect" class="priority-select">
+                                    <option value="low">Low</option>
+                                    <option value="medium" selected>Medium</option>
+                                    <option value="high">High</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-text">Status: </span>
+                            <div class="status-dropdown">
+                                <select id="createTaskStatusSelect" class="status-select">
+                                    <option value="backlog" selected>Backlog</option>
+                                    <option value="progress">In Progress</option>
+                                    <option value="review">Review</option>
+                                    <option value="testing">Testing</option>
+                                    <option value="done">Done</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-text">Created: </span>
+                            <span class="info-value created-badge" id="createTaskCreatedDate">Today</span>
+                        </div>
+                        <div class="time-tracking-section">
+                            <span class="info-text">Time Tracking: </span>
+                            <div class="progress-wrapper">
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: 0%;"></div>
+                                </div>
+                                <div class="time-labels">
+                                    <span class="time-spent">0h</span>
+                                    <span class="time-remaining" id="createTimeRemaining">2h remaining</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="info-right">
+                        <!-- Right section is now empty but preserved for future use -->
+                    </div>
+                </div>
+
+                <!-- Task Name Field -->
+                <div class="task-name-field">
+                    <label class="field-label">Task name</label>
+                    <input 
+                        type="text" 
+                        class="task-name-input" 
+                        id="createTaskNameInput" 
+                        value=""
+                        placeholder="Enter task name..."
+                    />
+                </div>
+
+                <!-- Description Section -->
+                <div class="description-section">
+                    <div class="description-header">
+                        <label class="field-label">Description:</label>
+                        <div class="edit-preview-buttons">
+                            <button class="mode-btn active" id="createEditModeBtn">Edit</button>
+                            <button class="mode-btn" id="createPreviewModeBtn">Preview</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Editor Toolbar -->
+                    <div class="editor-toolbar" id="createEditorToolbar">
+                        <button class="toolbar-btn" data-command="bold" title="Bold"><strong>B</strong></button>
+                        <button class="toolbar-btn" data-command="italic" title="Italic"><em>I</em></button>
+                        <button class="toolbar-btn" data-command="code" title="Code">&lt;/&gt;</button>
+                        <button class="toolbar-btn" data-command="h1" title="Heading 1">H1</button>
+                        <button class="toolbar-btn" data-command="h2" title="Heading 2">H2</button>
+                        <button class="toolbar-btn" data-command="h3" title="Heading 3">H3</button>
+                        <button class="toolbar-btn" data-command="ul" title="Bullet List">• List</button>
+                        <button class="toolbar-btn" data-command="ol" title="Numbered List">1. List</button>
+                        <button class="toolbar-btn" data-command="quote" title="Quote">❝ Quote</button>
+                        <button class="toolbar-btn" data-command="link" title="Link">🔗</button>
+                        <button class="toolbar-btn" data-command="image" title="Image">🖼️</button>
+                    </div>
+                    
+                    <!-- Text Content Area -->
+                    <div class="text-content-area">
+                        <div id="createTaskDescriptionPreview" class="description-preview" style="display: none;">
+                            <!-- Preview will be populated by JavaScript -->
+                        </div>
+                        <textarea 
+                            id="createTaskDescriptionEditor" 
+                            class="description-editor" 
+                            placeholder="Enter task description..."
+                        ></textarea>
+                    </div>
+                    
+                    <!-- Image Upload Area -->
+                    <div class="image-drop-zone">
+                        <p>Drop an image here or <span class="upload-link">click to select</span></p>
+                        <input type="file" id="createImageUpload" accept="image/*" style="display: none;">
+                    </div>
+                    
+                    <!-- Activities Section -->
+                    <div class="activities-section">
+                        <div class="activities-header">
+                            <h3>Activities</h3>
+                        </div>
+                        
+                        <!-- Add Comment Form -->
+                        <div class="add-comment-section">
+                            <textarea id="createNewCommentInput" class="comment-input" placeholder="Add a comment..." rows="3"></textarea>
+                            <button type="button" id="createAddCommentBtn" class="add-comment-btn">Add Comment</button>
+                        </div>
+                        
+                        <div class="activities-list" id="createActivitiesList">
+                            <!-- Activities will be populated by JavaScript -->
+                            <div class="no-activities">No activities found</div>
+                        </div>
+                    </div>
+                </div>
+
+                </div>
+
+                <!-- Hidden fields for JavaScript compatibility -->
+                <div style="display: none;">
+                    <select id="createTaskAssignee">
+                        <option value="">Unassigned</option>
+                        <option value="dev-bohdan">Dev-Bohdan</option>
+                        <option value="dev-mykola">Dev-Mykola</option>
+                        <option value="tech-ruslan">Tech-Ruslan</option>
+                    </select>
+                    <input type="text" id="createTaskEstimate" />
+                    <input type="date" id="createTaskCreated" />
+                    <input type="text" id="createTaskTimeSpent" />
+                    <select id="createTaskPriority">
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                    </select>
+                    <div class="task-type-buttons">
+                        <button class="type-btn active" data-type="task" id="createTaskTypeTask">Task</button>
+                        <button class="type-btn" data-type="bug" id="createTaskTypeBug">Bug</button>
+                    </div>
+                    <div id="createTimeRemaining"></div>
+                    <div id="createTimeProgress"></div>
+                    <div id="createActivityFeed"></div>
+                    <span id="createCharCount">0</span>
+                    <textarea id="createCommentInput"></textarea>
+                </div>
+
+            </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Time Tracking Modal -->
+    <div class="modal" id="timeTrackingModal" style="display: none;" role="dialog" aria-labelledby="timeTrackingTitle" aria-describedby="timeTrackingDescription">
+        <div class="modal-content time-tracking-modal">
+            <!-- Modal Header -->
+            <div class="time-modal-header">
+                <h2 id="timeTrackingTitle">Time tracking</h2>
+            </div>
+            
+            <!-- Modal Body -->
+            <div class="time-modal-body">
+                <!-- Progress Bar -->
+                <div class="time-progress-section">
+                    <div class="progress-info">
+                        <span class="time-spent-label" id="timeSpentDisplay">0h</span>
+                        <span class="time-remaining-label" id="timeRemainingDisplay">0h remaining</span>
+                    </div>
+                    <div class="progress-bar-wrapper">
+                        <div class="progress-bar" id="timeProgressBar">
+                            <div class="progress-fill" id="timeProgressFill" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Original Estimate Info -->
+                <div class="estimate-info">
+                    <span class="estimate-text">The original estimate for this work item was</span>
+                    <span class="estimate-value" id="originalEstimateValue">0h</span>
+                </div>
+
+                <!-- Time Input Fields -->
+                <div class="time-inputs-grid">
+                    <div class="time-input-group">
+                        <label for="timeSpentInput" class="time-input-label">Time spent</label>
+                        <input 
+                            type="text" 
+                            id="timeSpentInput" 
+                            class="time-input-field" 
+                            placeholder="0h"
+                            autocomplete="off"
+                        />
+                    </div>
+                    
+                    <div class="time-input-group">
+                        <label for="timeOriginalInput" class="time-input-label">Original Estimate</label>
+                        <input 
+                            type="text" 
+                            id="timeOriginalInput" 
+                            class="time-input-field" 
+                            placeholder="0h"
+                            autocomplete="off"
+                        />
+                    </div>
+                </div>
+
+                <!-- Format Help -->
+                <div class="format-help">
+                    <p>Use the format: 2w 4d 6h 45m</p>
+                    <ul class="format-list">
+                        <li><strong>w</strong> = weeks</li>
+                        <li><strong>d</strong> = days</li>
+                        <li><strong>h</strong> = hours</li>
+                        <li><strong>m</strong> = minutes</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="time-modal-footer">
+                <button type="button" class="btn-secondary" onclick="closeTimeTrackingModal()">
+                    Cancel
+                </button>
+                <button type="button" class="btn-primary" id="saveTimeTrackingBtn">
+                    Save
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Project Modal -->
+    <div class="modal" id="editProjectModal" style="display: none;">
+        <div class="modal-content edit-project-modal">
+            <div class="modal-header">
+                <h2>Project details</h2>
+                <button class="modal-close" onclick="closeEditProjectModal()" type="button">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <form id="editProjectForm" class="project-form">
+                <div class="form-group">
+                    <label for="editProjectName" class="form-label">Name *</label>
+                    <input 
+                        type="text" 
+                        id="editProjectName" 
+                        name="editProjectName"
+                        class="form-input" 
+                        placeholder="Enter project name..."
+                        required
+                        maxlength="100"
+                    />
+                    <div class="form-error" id="editProjectNameError"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="editProjectDescription" class="form-label">Description</label>
+                    <textarea 
+                        id="editProjectDescription" 
+                        name="editProjectDescription"
+                        class="form-textarea" 
+                        placeholder="Describe your project..."
+                        rows="6"
+                        maxlength="1000"
+                    ></textarea>
+                    <div class="form-error" id="editProjectDescriptionError"></div>
+                    <div class="character-count">
+                        <span id="editDescriptionCharCount">0</span>/1000 characters
+                    </div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn-cancel" onclick="closeEditProjectModal()">Close</button>
+                    <button type="submit" class="btn-save" id="saveProjectBtn">
+                        <span class="btn-text">Save</span>
+                        <div class="btn-loading" style="display: none;">
+                            <div class="loading-spinner"></div>
+                            Saving...
+                        </div>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Developer Modal -->
+    <div class="modal" id="addDeveloperModal" style="display: none;">
+        <div class="modal-content add-developer-modal">
+            <div class="modal-header">
+                <h2>Add New Developer</h2>
+                <button class="modal-close" onclick="closeAddDeveloperModal()" type="button">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <form id="addDeveloperForm" class="developer-form">
+                <div class="form-group">
+                    <label for="developerName" class="form-label">Developer Name *</label>
+                    <input 
+                        type="text" 
+                        id="developerName" 
+                        name="developerName"
+                        class="form-input" 
+                        placeholder="Enter developer name..."
+                        required
+                        maxlength="50"
+                    />
+                    <div class="form-error" id="developerNameError"></div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn-cancel" onclick="closeAddDeveloperModal()">Cancel</button>
+                    <button type="submit" class="btn-save" id="addDeveloperSaveBtn">
+                        <span class="btn-text">Add</span>
+                        <div class="btn-loading" style="display: none;">
+                            <div class="loading-spinner"></div>
+                            Adding...
+                        </div>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+
+    <script src="../project-board.js"></script>
+    
+    <script>
+        // Простий спосіб додати кнопку через JavaScript
+        setTimeout(() => {
+            const projectTitle = document.querySelector('.project-title h1');
+            if (projectTitle) {
+                const infoButton = document.createElement('button');
+                infoButton.innerHTML = '<img src="../res/icons/info_icon.png" alt="Info" width="16" height="16" />';
+                infoButton.style.cssText = `
+                    margin-left: 10px;
+                    padding: 4px;
+                    background: transparent;
+                    border: none;
+                    cursor: pointer;
+                    border-radius: 4px;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    opacity: 0.7;
+                    transition: opacity 0.2s ease;
+                `;
+                
+                infoButton.addEventListener('mouseenter', () => {
+                    infoButton.style.opacity = '1';
+                });
+                
+                infoButton.addEventListener('mouseleave', () => {
+                    infoButton.style.opacity = '0.7';
+                });
+                
+                infoButton.addEventListener('click', () => {
+                    // Знаходимо правильний метод для відкриття модалу
+                    if (window.projectBoard && window.projectBoard.openEditProjectModal) {
+                        window.projectBoard.openEditProjectModal();
+                    } else {
+                        // Альтернативний спосіб
+                        const editModal = document.getElementById('editProjectModal');
+                        if (editModal) {
+                            editModal.style.display = 'flex';
+                            document.body.style.overflow = 'hidden';
+                        }
+                    }
+                });
+                
+                projectTitle.appendChild(infoButton);
+                console.log('Info button with icon added successfully!');
+            }
+            
+            // Time tracking click handler is now properly handled in project-board.js
+            // via setupTimeTrackingClickHandler() using event delegation
+            console.log('Time tracking will be handled by project-board.js setupTimeTrackingClickHandler');
+        }, 1000);
+    </script>
+
+    <!-- Back button navigation is handled by project-board.js -->
+</body>
+</html>
+    <script>
+        // Simple auto-initialization for project board
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('🚀 Auto-initializing ProjectBoard...');
+            if (typeof ProjectBoard !== 'undefined') {
+                console.log('✅ ProjectBoard class found, creating instance...');
+                window.projectBoard = new ProjectBoard();
+                window.projectBoardInstance = window.projectBoard; // For create modal
+            } else {
+                console.log('❌ ProjectBoard class not found');
+            }
+        });
+    </script>
