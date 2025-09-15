@@ -129,43 +129,6 @@ fira/
 └── docker-compose.prod.yml # Production Docker setup
 ```
 
-## Configuration
-
-### User Management
-
-Edit `web/users.json`:
-```json
-{
-  "users": [
-    {
-      "id": "1",
-      "username": "admin",
-      "password": "your_secure_password",
-      "role": "admin",
-      "email": "admin@company.com"
-    }
-  ]
-}
-```
-
-### Environment Variables
-- `FIRA_PORT=8080` - Server port
-- `FIRA_REQUIRE_LOGIN=true` - Enable authentication
-
-## Testing
-
-```bash
-# Run tests
-python test-task-creation.py
-python test-admin-login.py
-python test-git-integration.py
-```
-
-## Requirements
-
-- **Browser**: Chrome, Firefox, Safari, Edge
-- **Python**: 3.7+ (auto-installed by start scripts)
-- **Storage**: ~10MB disk space
 
 ## Support
 

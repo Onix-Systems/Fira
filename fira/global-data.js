@@ -3113,17 +3113,29 @@ class GlobalDataManager {
                 
                 if (successCount > 0) {
                     console.log(`✅ Created ${successCount}/${statusDirectories.length} developer folders via server API`);
-                    
+
+                    // Update project's developers list in memory
+                    const project = this.projects.find(p => p.id === projectId);
+                    if (project) {
+                        if (!project.developers) {
+                            project.developers = [];
+                        }
+                        if (!project.developers.includes(developerId)) {
+                            project.developers.push(developerId);
+                            console.log(`👥 Added ${developerId} to project.developers for ${projectId}`);
+                        }
+                    }
+
                     // Clear developers cache to force refresh
                     if (this.projectDevelopers[projectId]) {
                         delete this.projectDevelopers[projectId];
                     }
-                    
+
                     // Clean up the operation tracking on success
                     if (this.developerOperations) {
                         this.developerOperations.delete(operationKey);
                     }
-                    
+
                     return;
                 } else {
                     const errors = results.map(r => `${r.statusDir}: ${r.error || 'Unknown error'}`).join(', ');

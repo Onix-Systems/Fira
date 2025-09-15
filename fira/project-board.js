@@ -347,6 +347,97 @@ class ProjectBoard {
             } else {
                 console.error('❌ Project name element not found!');
             }
+            
+            // Try to load fresh project description after initial loading
+            setTimeout(() => {
+                this.loadFreshProjectData();
+            }, 500); // Small delay to ensure global data manager is ready
+        }
+    }
+    
+    // Method to load fresh project data from server when page loads
+    async loadFreshProjectData() {
+        console.log('🔍 loadFreshProjectData called for project:', this.currentProject?.id);
+        
+        if (!this.currentProject) {
+            console.log('❌ No current project, exiting loadFreshProjectData');
+            return;
+        }
+        
+        console.log('🔍 Current project description:', this.currentProject.description);
+        console.log('🔍 Description equals ID?', this.currentProject.description === this.currentProject.id);
+        console.log('🔍 Description is empty?', !this.currentProject.description || this.currentProject.description.trim() === '');
+        
+        // Only try to load if description is missing or looks like project ID
+        if (this.currentProject.description && 
+            this.currentProject.description !== this.currentProject.id && 
+            this.currentProject.description.trim() !== '') {
+            console.log('✅ Project already has valid description, skipping fresh data load');
+            return;
+        }
+        
+        // Try to load from server first
+        console.log('🔍 Checking server availability:');
+        console.log('  - globalDataManager:', !!window.globalDataManager);
+        console.log('  - apiClient:', !!window.globalDataManager?.apiClient);
+        console.log('  - loadingMode:', window.globalDataManager?.loadingMode);
+        
+        if (window.globalDataManager && 
+            window.globalDataManager.apiClient && 
+            window.globalDataManager.loadingMode === 'server') {
+            try {
+                console.log('🔄 Loading fresh project data on page load...');
+                const serverProjects = await window.globalDataManager.apiClient.getProjects();
+                console.log('🔍 Server projects loaded:', serverProjects.length);
+                const serverProject = serverProjects.find(p => p.id === this.currentProject.id);
+                console.log('🔍 Found server project:', !!serverProject);
+                console.log('🔍 Server project description:', serverProject?.description);
+                
+                if (serverProject && serverProject.description && 
+                    serverProject.description !== serverProject.id && 
+                    serverProject.description.trim() !== '') {
+                    
+                    console.log('✅ Found fresh project data from server:', serverProject);
+                    // Update current project with fresh data
+                    this.currentProject = { ...this.currentProject, ...serverProject };
+                    
+                    // Also update in globalDataManager if it exists
+                    if (window.globalDataManager && window.globalDataManager.projects) {
+                        const projectIndex = window.globalDataManager.projects.findIndex(p => p.id === this.currentProject.id);
+                        if (projectIndex !== -1) {
+                            window.globalDataManager.projects[projectIndex] = { ...this.currentProject };
+                            console.log('✅ Updated project in globalDataManager');
+                        }
+                    }
+                    
+                    console.log('✅ Project description restored from server on page load');
+                    return; // Successfully loaded from server
+                } else {
+                    console.log('⚠️ Server project has no valid description');
+                }
+            } catch (error) {
+                console.warn('⚠️ Failed to load fresh project data on page load:', error);
+            }
+        } else {
+            console.log('⚠️ Server not available for loading fresh data');
+        }
+        
+        // Try to load from global data manager as fallback
+        if ((!this.currentProject.description || 
+             this.currentProject.description === this.currentProject.id || 
+             this.currentProject.description.trim() === '') &&
+            window.globalDataManager && window.globalDataManager.getProjects) {
+            
+            const projects = window.globalDataManager.getProjects();
+            const foundProject = projects.find(p => p.id === this.currentProject.id);
+            if (foundProject && foundProject.description && 
+                foundProject.description !== foundProject.id && 
+                foundProject.description.trim() !== '') {
+                
+                console.log('✅ Found project data in globalDataManager:', foundProject);
+                this.currentProject = { ...this.currentProject, ...foundProject };
+                console.log('✅ Project description restored from globalDataManager on page load');
+            }
         }
     }
 
@@ -893,13 +984,36 @@ class ProjectBoard {
         }
         const currentSelection = developerSelect.value;
         
-        // Get unique developers from tasks
+        // Get unique developers from multiple sources
         const developers = new Set();
+
+        // Get developers from existing tasks
         this.tasks.forEach(task => {
             if (task.developer) {
                 developers.add(task.developer);
             }
         });
+
+        // Get developers from current project's developers list
+        if (this.currentProject && this.currentProject.developers && Array.isArray(this.currentProject.developers)) {
+            this.currentProject.developers.forEach(dev => {
+                if (dev && dev.trim()) {
+                    developers.add(dev.trim());
+                }
+            });
+        }
+
+        // Get developers from globalDataManager cache
+        if (window.globalDataManager && window.globalDataManager.projectDevelopers && this.currentProject) {
+            const projectDevelopers = window.globalDataManager.projectDevelopers[this.currentProject.id];
+            if (projectDevelopers && Array.isArray(projectDevelopers)) {
+                projectDevelopers.forEach(dev => {
+                    if (dev && dev.trim()) {
+                        developers.add(dev.trim());
+                    }
+                });
+            }
+        }
         
         // Update dropdown options
         developerSelect.innerHTML = `
@@ -2140,8 +2254,8 @@ class ProjectBoard {
                     this.currentTask.priority = newPriority;
                 }
                 
-                // Save changes automatically
-                this.saveTaskChanges(task);
+                // Save changes automatically (don't close modal after priority change)
+                this.saveTaskChanges(task, { closeAfterSave: false });
                 console.log('Priority updated to:', newPriority);
             });
         }
@@ -2154,12 +2268,15 @@ class ProjectBoard {
                 const newStatus = e.target.value;
                 const oldStatus = task.status;
                 
+                
                 // Update task status
                 task.status = newStatus;
+                task.column = newStatus; // Ensure column is synced
                 
                 // Update currentTask reference
                 if (this.currentTask && this.currentTask.id === task.id) {
                     this.currentTask.status = newStatus;
+                    this.currentTask.column = newStatus;
                 }
                 
                 // Update task in tasks array
@@ -2173,12 +2290,21 @@ class ProjectBoard {
                     console.error(`❌ Task ${task.id} not found in tasks array!`);
                 }
                 
+                // Update any visible status indicators in the modal
+                const modalStatusBadges = document.querySelectorAll('.status-badge, .task-status');
+                modalStatusBadges.forEach(badge => {
+                    if (badge.closest('#taskDetailModal')) {
+                        badge.textContent = this.getStatusDisplayName(newStatus);
+                        badge.className = badge.className.replace(/status-\w+/g, '') + ` status-${newStatus}`;
+                    }
+                });
+                
                 // Re-render the board to show the task in new column
                 console.log(`🎨 Re-rendering board after status change to ${newStatus}`);
                 this.filterAndRenderTasks();
                 
-                // Save changes automatically
-                this.saveTaskChanges(task);
+                // Save changes automatically (don't close modal after status change)
+                this.saveTaskChanges(task, { closeAfterSave: false, skipSuccessMessage: true });
                 console.log('Status updated from', oldStatus, 'to:', newStatus);
             });
         }
@@ -3802,34 +3928,54 @@ class ProjectBoard {
     }
 
 
-    openEditProjectModal() {
+    async openEditProjectModal() {
         if (!this.currentProject) {
             this.showMessage('No project selected', 'error');
             return;
         }
 
         // Get full project data from available sources
-        let projectData = this.currentProject;
+        let projectData = { ...this.currentProject };
         
         // First, try to get from global data manager
         if (window.globalDataManager && window.globalDataManager.getProjects) {
             const fullProject = window.globalDataManager.getProjects().find(p => p.id === this.currentProject.id);
             if (fullProject) {
-                projectData = fullProject;
+                projectData = { ...projectData, ...fullProject };
                 console.log('✅ Found project in globalDataManager:', projectData);
             }
         }
         
-        // Fallback to static PROJECTS_DATA if description is missing
-        if ((!projectData.description || projectData.description === projectData.id) && window.PROJECTS_DATA) {
-            const staticProject = window.PROJECTS_DATA.find(p => p.id === this.currentProject.id);
-            if (staticProject) {
-                projectData = { ...projectData, ...staticProject };
-                console.log('✅ Enhanced project data with static data:', projectData);
+        // Try to load fresh project data from server if available and description is missing/invalid
+        if ((!projectData.description || projectData.description === projectData.id) && 
+            window.globalDataManager && 
+            window.globalDataManager.apiClient && 
+            window.globalDataManager.loadingMode === 'server') {
+            try {
+                console.log('🔄 Loading fresh project data from server...');
+                const serverProjects = await window.globalDataManager.apiClient.getProjects();
+                const serverProject = serverProjects.find(p => p.id === this.currentProject.id);
+                if (serverProject && serverProject.description && serverProject.description !== serverProject.id) {
+                    projectData = { ...projectData, ...serverProject };
+                    // Also update the current project in memory
+                    this.currentProject = { ...this.currentProject, description: serverProject.description };
+                    console.log('✅ Loaded and updated fresh project data from server:', serverProject);
+                }
+            } catch (error) {
+                console.warn('⚠️ Failed to load fresh project data from server:', error);
             }
         }
         
-        // If still no description, set empty string to avoid showing project ID
+        // Fallback to static PROJECTS_DATA if description is still missing/invalid
+        if ((!projectData.description || projectData.description === projectData.id) && window.PROJECTS_DATA) {
+            const staticProject = window.PROJECTS_DATA.find(p => p.id === this.currentProject.id);
+            if (staticProject && staticProject.description && staticProject.description !== staticProject.id) {
+                projectData = { ...projectData, ...staticProject };
+                console.log('✅ Enhanced project data with static data:', staticProject);
+            }
+        }
+        
+        // If still no valid description, set empty string to avoid showing project ID
         if (!projectData.description || projectData.description === projectData.id) {
             projectData.description = '';
             console.log('⚠️ Set empty description to avoid showing project ID');
@@ -3992,7 +4138,10 @@ class ProjectBoard {
             
             // Add developer to project
             await this.addDeveloperToProject(developerId, developerName);
-            
+
+            // Add developer to local state immediately to ensure it appears in dropdowns
+            this.addDeveloperLocally(developerId, developerName);
+
             // Instead of full refresh, just clear the developers cache so the dropdown will be updated
             if (window.globalDataManager) {
                 // Clear only the developers cache for this project
@@ -4001,10 +4150,13 @@ class ProjectBoard {
                     console.log('🗑️ Cleared developers cache for project:', this.currentProject.id);
                 }
             }
-            
-            // Update developer dropdown
+
+            // Update developer dropdown (used for filtering)
             this.updateDeveloperDropdown();
-            
+
+            // Update assignee dropdown for task assignment (force refresh to get latest)
+            await this.updateAssigneeDropdown('Unassigned', true);
+
             // Close modal
             this.closeAddDeveloperModal();
             
@@ -4061,7 +4213,28 @@ class ProjectBoard {
     addDeveloperLocally(developerId, developerName) {
         // Add developer info to a local developers list if needed
         // This is a fallback for when filesystem operations aren't available
-        console.log(`Added developer locally: ${developerName} (${developerId})`);
+
+        // Add to current project's developers array
+        if (this.currentProject) {
+            if (!this.currentProject.developers) {
+                this.currentProject.developers = [];
+            }
+            if (!this.currentProject.developers.includes(developerId)) {
+                this.currentProject.developers.push(developerId);
+                console.log(`Added developer locally: ${developerName} (${developerId})`);
+            }
+        }
+
+        // Also add to globalDataManager cache if available
+        if (window.globalDataManager && window.globalDataManager.projectDevelopers && this.currentProject) {
+            const projectId = this.currentProject.id;
+            if (!window.globalDataManager.projectDevelopers[projectId]) {
+                window.globalDataManager.projectDevelopers[projectId] = [];
+            }
+            if (!window.globalDataManager.projectDevelopers[projectId].includes(developerId)) {
+                window.globalDataManager.projectDevelopers[projectId].push(developerId);
+            }
+        }
     }
 
     closeAddDeveloperModal() {
@@ -4983,6 +5156,17 @@ class ProjectBoard {
             window.location.href = `/analytics?project=${encodeURIComponent(this.currentProject.id)}`;
         }
     }
+
+    getStatusDisplayName(status) {
+        const statusNames = {
+            'backlog': 'Backlog',
+            'progress': 'In Progress',
+            'review': 'Review',
+            'testing': 'Testing',
+            'done': 'Done'
+        };
+        return statusNames[status] || status;
+    }
 }
 
 // Modal close functions
@@ -5023,6 +5207,12 @@ async function closeTaskModal() {
         const modal = document.getElementById('taskDetailModal');
         if (modal) modal.style.display = 'none';
         document.body.style.overflow = 'auto';
+        
+        // Refresh kanban board to show updated task status after closing modal
+        if (window.projectBoard) {
+            console.log('🔄 Refreshing kanban board after closing task modal');
+            window.projectBoard.filterAndRenderTasks();
+        }
     }
 }
 
@@ -5163,6 +5353,15 @@ window.initProjectBoard = async function(projectName, taskName = null) {
         }
         
         document.getElementById('projectName').textContent = board.currentProject.name;
+        
+        // Try to load fresh project data from server if description is missing
+        if (board.currentProject && (!board.currentProject.description || 
+            board.currentProject.description === board.currentProject.id || 
+            board.currentProject.description.trim() === '')) {
+            
+            console.log('🔄 Loading fresh project data in router mode...');
+            await board.loadFreshProjectData();
+        }
         
         // Load tasks for the new project before filtering and rendering
         await board.loadProjectTasks();
@@ -6680,6 +6879,10 @@ window.closeCreateTaskDetailModal = function() {
         if (window.projectBoard) {
             console.log('🧹 Clearing currentTask on create modal close');
             window.projectBoard.currentTask = null;
+            
+            // Refresh kanban board to show any newly created tasks
+            console.log('🔄 Refreshing kanban board after closing create task modal');
+            window.projectBoard.filterAndRenderTasks();
         }
     }
 };
