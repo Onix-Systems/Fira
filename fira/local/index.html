@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fira - Project Management</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="projects-data.js"></script>
+    <script src="file-system.js"></script>
+    <script src="jquery-file-loader.js"></script>
+    <script src="real-filesystem-loader.js"></script>
+    <script src="auto-projects-scanner.js"></script>
+    <script src="api-client.js"></script>
+    <script src="global-data.js"></script>
+    <script src="router.js"></script>
+    <script src="script.js"></script>
+</head>
+<body>
+    <!-- Main app container where pages will be loaded -->
+    <div id="app-content">
+        <!-- Content will be loaded dynamically by router -->
+        <div class="loading-screen">
+            <div class="loading-content">
+                <h1>Fira</h1>
+                <p>Loading...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Global styles for router -->
+    <style>
+        .loading-screen {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .loading-content {
+            text-align: center;
+            color: white;
+        }
+        
+        .loading-content h1 {
+            font-size: 48px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: #8b5cf6;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .loading-content p {
+            font-size: 18px;
+            opacity: 0.8;
+        }
+        
+        .error-page {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+        }
+        
+        .error-content {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+            max-width: 500px;
+            width: 100%;
+        }
+        
+        .error-content h1 {
+            color: #dc2626;
+            margin-bottom: 16px;
+            font-size: 24px;
+        }
+        
+        .error-content p {
+            color: #6b7280;
+            margin-bottom: 24px;
+            font-size: 16px;
+        }
+        
+        .btn-primary {
+            background: #8b5cf6;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .btn-primary:hover {
+            background: #7c3aed;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+        }
+    </style>
+
+    <!-- Router initialization is handled in router.js -->
+</body>
+</html>
