@@ -12,7 +12,6 @@ Visual Kanban project management with task tracking and team collaboration.
 - **Project Dashboard** - All projects overview with search and filtering
 - **Task Management** - Drag-and-drop tasks with time tracking and comments
 - **Team Collaboration** - Developer-specific task assignments and workflows
-- **REST API** - Full API for task and project operations
 
 ## Quick Start
 
