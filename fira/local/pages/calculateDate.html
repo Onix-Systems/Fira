@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculate Date - Fira</title>
+    <link rel="stylesheet" href="../style.css">
+    <style>
+        .calculate-date-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .calculate-date-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 32px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .calculate-date-header h1 {
+            margin: 0 0 0 16px;
+            font-size: 24px;
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .back-button {
+            background: #f3f4f6;
+            border: none;
+            border-radius: 8px;
+            padding: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .back-button:hover {
+            background: #e5e7eb;
+        }
+
+        .date-calculator {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 32px;
+            margin-bottom: 32px;
+        }
+
+        .calculator-section {
+            background: #f9fafb;
+            padding: 24px;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+        }
+
+        .calculator-section h2 {
+            margin: 0 0 20px 0;
+            font-size: 18px;
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #374151;
+            font-size: 14px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.2s ease;
+            box-sizing: border-box;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #8b5cf6;
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+        }
+
+        .form-select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+            background: white;
+            cursor: pointer;
+            box-sizing: border-box;
+        }
+
+        .form-select:focus {
+            outline: none;
+            border-color: #8b5cf6;
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+        }
+
+        .form-help {
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 4px;
+        }
+
+        .calculate-btn {
+            background: #8b5cf6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 12px 24px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            width: 100%;
+        }
+
+        .calculate-btn:hover {
+            background: #7c3aed;
+        }
+
+        .result-section {
+            background: #ecfdf5;
+            border: 1px solid #d1fae5;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .result-section.error {
+            background: #fef2f2;
+            border-color: #fecaca;
+        }
+
+        .result-title {
+            font-weight: 600;
+            color: #065f46;
+            margin-bottom: 8px;
+        }
+
+        .result-section.error .result-title {
+            color: #dc2626;
+        }
+
+        .result-value {
+            font-size: 16px;
+            color: #047857;
+            font-weight: 500;
+        }
+
+        .result-section.error .result-value {
+            color: #dc2626;
+        }
+
+        .examples-section {
+            margin-top: 32px;
+            padding: 20px;
+            background: #f8fafc;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .examples-section h3 {
+            margin: 0 0 16px 0;
+            font-size: 16px;
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        .examples-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .example-item {
+            background: white;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .example-title {
+            font-weight: 500;
+            color: #475569;
+            margin-bottom: 4px;
+            font-size: 14px;
+        }
+
+        .example-description {
+            color: #64748b;
+            font-size: 13px;
+        }
+
+        @media (max-width: 768px) {
+            .date-calculator {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .examples-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-container">
+        <div class="calculate-date-container">
+            <!-- Header -->
+            <div class="calculate-date-header">
+                <button class="back-button" onclick="window.history.back()">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                    </svg>
+                </button>
+                <h1>Date Calculator</h1>
+            </div>
+
+            <!-- Calculator Grid -->
+            <div class="date-calculator">
+                <!-- Project Release Calculator -->
+                <div class="calculator-section">
+                    <h2>Project Release Calculator</h2>
+
+                    <div class="form-group">
+                        <label for="releaseDate" class="form-label">Original Release Date & Time</label>
+                        <input type="datetime-local" id="releaseDate" class="form-input">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="workedTime" class="form-label">Time Worked</label>
+                        <input type="text" id="workedTime" class="form-input" placeholder="e.g., 5h, 2d, 30m">
+                        <div class="form-help">Formats: h (hours), d (days=8h), w (weeks=40h), m (minutes)</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="overtimeNeeded" class="form-label">Additional Overtime Needed</label>
+                        <input type="text" id="overtimeNeeded" class="form-input" placeholder="e.g., 2h, 1d, 90m">
+                        <div class="form-help">Extra time beyond remaining work day hours</div>
+                    </div>
+
+                    <button class="calculate-btn" onclick="calculateNewReleaseDate()">Calculate New Release Date</button>
+
+                    <div id="releaseResult" style="display: none;"></div>
+                </div>
+
+                <!-- Calculate Difference -->
+                <div class="calculator-section">
+                    <h2>Calculate Time Difference</h2>
+
+                    <div class="form-group">
+                        <label for="fromDate" class="form-label">From Date</label>
+                        <input type="date" id="fromDate" class="form-input">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="toDate" class="form-label">To Date</label>
+                        <input type="date" id="toDate" class="form-input">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="diffUnit" class="form-label">Result Unit</label>
+                        <select id="diffUnit" class="form-select">
+                            <option value="all">All Units</option>
+                            <option value="days">Days</option>
+                            <option value="weeks">Weeks</option>
+                            <option value="months">Months</option>
+                            <option value="years">Years</option>
+                        </select>
+                    </div>
+
+                    <div style="margin-bottom: 20px;"></div>
+
+                    <button class="calculate-btn" onclick="calculateDifference()">Calculate</button>
+
+                    <div id="differenceResult" style="display: none;"></div>
+                </div>
+            </div>
+
+            <!-- Examples Section -->
+            <div class="examples-section">
+                <h3>Examples & Time Format Guide</h3>
+                <div class="examples-grid">
+                    <div class="example-item">
+                        <div class="example-title">Release Date Example</div>
+                        <div class="example-description">Release: Aug 10, 2025 10:00 AM<br>Worked: 5h, Overtime: 2h<br>New: Aug 10, 2025 3:00 PM</div>
+                    </div>
+                    <div class="example-item">
+                        <div class="example-title">Time Formats</div>
+                        <div class="example-description">• 30m = 30 minutes<br>• 2h = 2 hours<br>• 1d = 8 hours<br>• 1w = 40 hours</div>
+                    </div>
+                    <div class="example-item">
+                        <div class="example-title">Weekend Handling</div>
+                        <div class="example-description">Automatically skips Saturday & Sunday<br>Work day: 9 AM - 6 PM (8 hours)</div>
+                    </div>
+                    <div class="example-item">
+                        <div class="example-title">Mixed Formats</div>
+                        <div class="example-description">You can combine: "1d 2h 30m"<br>Total: 10 hours 30 minutes</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Set today's date as default
+        document.addEventListener('DOMContentLoaded', () => {
+            const today = new Date().toISOString().split('T')[0];
+            const now = new Date();
+            const dateTimeString = now.getFullYear() + '-' +
+                String(now.getMonth() + 1).padStart(2, '0') + '-' +
+                String(now.getDate()).padStart(2, '0') + 'T' +
+                String(now.getHours()).padStart(2, '0') + ':' +
+                String(now.getMinutes()).padStart(2, '0');
+
+            document.getElementById('releaseDate').value = dateTimeString;
+            document.getElementById('fromDate').value = today;
+            document.getElementById('toDate').value = today;
+        });
+
+        // Parse time format like "5h", "2d", "30m", "1w"
+        function parseTimeToMinutes(timeStr) {
+            if (!timeStr) return 0;
+
+            const regex = /(\d+(?:\.\d+)?)\s*([hdwm])/gi;
+            let totalMinutes = 0;
+            let match;
+
+            while ((match = regex.exec(timeStr)) !== null) {
+                const value = parseFloat(match[1]);
+                const unit = match[2].toLowerCase();
+
+                switch (unit) {
+                    case 'm': // minutes
+                        totalMinutes += value;
+                        break;
+                    case 'h': // hours
+                        totalMinutes += value * 60;
+                        break;
+                    case 'd': // days (8 work hours)
+                        totalMinutes += value * 8 * 60;
+                        break;
+                    case 'w': // weeks (5 work days = 40 hours)
+                        totalMinutes += value * 5 * 8 * 60;
+                        break;
+                }
+            }
+
+            return totalMinutes;
+        }
+
+        // Check if date is weekend (Saturday = 6, Sunday = 0)
+        function isWeekend(date) {
+            const day = date.getDay();
+            return day === 0 || day === 6;
+        }
+
+        // Add working time to a date, skipping weekends
+        function addWorkingTime(startDate, minutesToAdd) {
+            const result = new Date(startDate);
+            let remainingMinutes = minutesToAdd;
+
+            while (remainingMinutes > 0) {
+                // If it's weekend, move to next Monday
+                if (isWeekend(result)) {
+                    result.setDate(result.getDate() + (result.getDay() === 0 ? 1 : 2));
+                    result.setHours(9, 0, 0, 0); // Start work day at 9 AM
+                }
+
+                // Calculate how many minutes we can add today
+                const currentHour = result.getHours();
+                const currentMinute = result.getMinutes();
+
+                // Work day is 9 AM to 6 PM (9 hours with 1 hour lunch break = 8 work hours)
+                const workDayStart = 9 * 60; // 9 AM in minutes
+                const workDayEnd = 18 * 60; // 6 PM in minutes
+                const currentTimeInMinutes = currentHour * 60 + currentMinute;
+
+                // If before work day, set to start of work day
+                if (currentTimeInMinutes < workDayStart) {
+                    result.setHours(9, 0, 0, 0);
+                    continue;
+                }
+
+                // If after work day, move to next work day
+                if (currentTimeInMinutes >= workDayEnd) {
+                    result.setDate(result.getDate() + 1);
+                    result.setHours(9, 0, 0, 0);
+                    continue;
+                }
+
+                // Calculate remaining work minutes today
+                const remainingWorkMinutesToday = workDayEnd - currentTimeInMinutes;
+                const minutesToAddToday = Math.min(remainingMinutes, remainingWorkMinutesToday);
+
+                result.setMinutes(result.getMinutes() + minutesToAddToday);
+                remainingMinutes -= minutesToAddToday;
+
+                // If we still have time to add, move to next work day
+                if (remainingMinutes > 0) {
+                    result.setDate(result.getDate() + 1);
+                    result.setHours(9, 0, 0, 0);
+                }
+            }
+
+            return result;
+        }
+
+        function calculateNewReleaseDate() {
+            const releaseDateStr = document.getElementById('releaseDate').value;
+            const workedTimeStr = document.getElementById('workedTime').value;
+            const overtimeNeededStr = document.getElementById('overtimeNeeded').value;
+
+            if (!releaseDateStr) {
+                showResult('releaseResult', 'Please enter the original release date', true);
+                return;
+            }
+
+            try {
+                const originalReleaseDate = new Date(releaseDateStr);
+                const workedMinutes = parseTimeToMinutes(workedTimeStr);
+                const overtimeMinutes = parseTimeToMinutes(overtimeNeededStr);
+
+                // Calculate remaining work time in current day
+                const workDayMinutes = 8 * 60; // 8 hours = 480 minutes
+                const remainingTodayMinutes = workDayMinutes - workedMinutes;
+
+                // Total additional time needed
+                let totalAdditionalMinutes = 0;
+
+                if (remainingTodayMinutes > 0) {
+                    // Still have time left today, only add overtime
+                    totalAdditionalMinutes = overtimeMinutes;
+                } else {
+                    // Overtime already includes remaining work from today + additional needed
+                    totalAdditionalMinutes = overtimeMinutes;
+                }
+
+                // Calculate new release date
+                const newReleaseDate = addWorkingTime(originalReleaseDate, totalAdditionalMinutes);
+
+                // Format results
+                const originalFormatted = originalReleaseDate.toLocaleString('en-US', {
+                    weekday: 'short',
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+
+                const newFormatted = newReleaseDate.toLocaleString('en-US', {
+                    weekday: 'short',
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+
+                const workedHours = Math.floor(workedMinutes / 60);
+                const workedMins = workedMinutes % 60;
+                const overtimeHours = Math.floor(overtimeMinutes / 60);
+                const overtimeMins = overtimeMinutes % 60;
+
+                let result = `<strong>Calculation Details:</strong><br>`;
+                result += `• Worked today: ${workedHours}h ${workedMins}m<br>`;
+                result += `• Additional overtime: ${overtimeHours}h ${overtimeMins}m<br>`;
+                result += `• Remaining in work day: ${Math.max(0, Math.floor(remainingTodayMinutes / 60))}h ${Math.max(0, remainingTodayMinutes % 60)}m<br><br>`;
+                result += `<strong>Original Release:</strong> ${originalFormatted}<br>`;
+                result += `<strong>New Release Date:</strong> ${newFormatted}`;
+
+                if (isWeekend(newReleaseDate)) {
+                    result += `<br><span style="color: #f59e0b;">⚠️ Note: New date falls on weekend</span>`;
+                }
+
+                showResult('releaseResult', result);
+            } catch (error) {
+                showResult('releaseResult', 'Error calculating new release date', true);
+            }
+        }
+
+        function calculateDifference() {
+            const fromDate = document.getElementById('fromDate').value;
+            const toDate = document.getElementById('toDate').value;
+            const unit = document.getElementById('diffUnit').value;
+
+            if (!fromDate || !toDate) {
+                showResult('differenceResult', 'Please fill in both dates', true);
+                return;
+            }
+
+            try {
+                const from = new Date(fromDate);
+                const to = new Date(toDate);
+
+                if (from > to) {
+                    showResult('differenceResult', 'From date must be before to date', true);
+                    return;
+                }
+
+                const diffTime = Math.abs(to - from);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                let result = '';
+
+                if (unit === 'all') {
+                    const years = Math.floor(diffDays / 365);
+                    const months = Math.floor((diffDays % 365) / 30);
+                    const days = diffDays % 30;
+                    const weeks = Math.floor(diffDays / 7);
+
+                    result = `<strong>${diffDays}</strong> days<br>`;
+                    result += `<strong>${weeks}</strong> weeks<br>`;
+                    if (years > 0) {
+                        result += `<strong>${years}</strong> years, <strong>${months}</strong> months, <strong>${days}</strong> days`;
+                    } else if (months > 0) {
+                        result += `<strong>${months}</strong> months, <strong>${days}</strong> days`;
+                    }
+                } else {
+                    switch (unit) {
+                        case 'days':
+                            result = `<strong>${diffDays}</strong> days`;
+                            break;
+                        case 'weeks':
+                            result = `<strong>${Math.floor(diffDays / 7)}</strong> weeks`;
+                            break;
+                        case 'months':
+                            result = `<strong>${Math.floor(diffDays / 30)}</strong> months`;
+                            break;
+                        case 'years':
+                            result = `<strong>${Math.floor(diffDays / 365)}</strong> years`;
+                            break;
+                    }
+                }
+
+                showResult('differenceResult',
+                    `From ${from.toLocaleDateString()} to ${to.toLocaleDateString()}<br>${result}`);
+            } catch (error) {
+                showResult('differenceResult', 'Error calculating difference', true);
+            }
+        }
+
+        function showResult(elementId, message, isError = false) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `
+                <div class="result-section ${isError ? 'error' : ''}">
+                    <div class="result-title">${isError ? 'Error' : 'Result'}</div>
+                    <div class="result-value">${message}</div>
+                </div>
+            `;
+            element.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
