@@ -6,66 +6,96 @@
 
 Visual Kanban project management with task tracking and team collaboration.
 
+Fira offers two deployment modes:
+- **🌐 Web Mode** - Server-based with user authentication and team collaboration
+- **📁 Local Mode** - Offline file-based project management for personal use
+
 ## Features
 
 - **Kanban Boards** - Organize tasks across workflow columns (Backlog → Progress → Review → Testing → Done)
 - **Project Dashboard** - All projects overview with search and filtering
 - **Task Management** - Drag-and-drop tasks with time tracking and comments
 - **Team Collaboration** - Developer-specific task assignments and workflows
+- **Dual Architecture** - Choose between server-based or local file-based operation
 
 ## Quick Start
 
-### Local Development (No Dependencies)
+### 📁 Local Mode (Offline, No Server Required)
+
+Perfect for personal project management with direct file system access.
 
 ```bash
 # 1. Clone repository
 git clone https://github.com/Onix-Systems/Fira.git
 cd Fira
 
-# 2. Start server
-cd web
+# 2. Open local version
+cd fira/local
+# Option A: Open index.html directly in Chrome/Edge 86+
+# Option B: Serve via Python
+python -m http.server 8080
+# Then visit http://localhost:8080
+```
+
+**Requirements:** Chrome/Edge 86+ (uses File System Access API)
+
+**How it works:**
+- Click "Choose Folder" to select your projects directory
+- Projects stored as folders with markdown task files
+- Works completely offline, no server needed
+- Direct file system access for easy backup/sync
+
+### 🌐 Web Mode (Server-based with Authentication)
+
+Full-featured server for team collaboration and multi-user access.
+
+```bash
+# 1. Clone repository
+git clone https://github.com/Onix-Systems/Fira.git
+cd Fira
+
+# 2. Start web server
+cd fira/web
 ./start.sh    # Linux/Mac
 start.bat     # Windows
 
 # 3. Open browser at http://localhost:8080
 ```
 
-Requirements: Python 3.7+ (auto-detected)
+**Requirements:** Python 3.7+ (auto-detected)
 
-### Production Deployment
+**How it works:**
+- Python HTTP server with REST API
+- User authentication and role management
+- Projects stored in `fira/web/projects/` directory
+- Team collaboration features
 
-#### Docker Setup
+### 🐳 Docker Deployment
+
+**[📖 Complete Docker Deployment Guide](fira/docker-deploy/README.md)**
+
+Quick Docker setup:
 
 ```bash
 # 1. Clone repository
 git clone https://github.com/Onix-Systems/Fira.git
 cd Fira
 
-# 2. Configure users (REQUIRED for production)
-cp web/users.json.example web/users.json
-# Edit users.json - add your admin credentials
+# 2. Build and run
+cd fira/docker-deploy
+docker build -t fira-web .
+docker run -p 8080:80 fira-web
 
-# 3. Deploy
-docker-compose -f docker-compose.prod.yml up -d
-
-# 4. Access at http://localhost:8080
+# 3. Access at http://localhost:8080
 ```
 
-#### Manual Production Setup
+The Docker deployment includes:
+- **Nginx**: Reverse proxy + static file serving
+- **Python Backend**: API server on port 8001
+- **Supervisor**: Process management
+- **Production optimizations**: Caching, compression, health checks
 
-```bash
-# 1. Configure users
-cp web/users.json.example web/users.json
-# Edit users.json with your team credentials
-
-# 2. Start production server
-cd web
-FIRA_REQUIRE_LOGIN=true python3 mini-server.py
-
-# 3. Setup Nginx (optional)
-# Copy web/nginx/nginx.conf to your Nginx config
-# Proxy API calls to Python backend on port 8001
-```
+For production deployment, Kubernetes, CI/CD pipelines, and troubleshooting, see the [Docker Deployment Guide](fira/docker-deploy/README.md).
 
 
 ## CI/CD and Deployment
@@ -113,20 +143,40 @@ CONTAINER_PORT: "8080"
    kubectl get ingress -n your-namespace
    ```
 
-### Directory Structure
+## Project Structure
+
 ```
 fira/
-├── web/                    # Production web application
-│   ├── mini-server.py     # Python HTTP server with API
-│   ├── nginx/nginx.conf   # Nginx configuration
-│   ├── Dockerfile         # Docker build configuration
-│   ├── users.json         # User authentication (production)
+├── web/                    # 🌐 Web Mode - Server-based application
+│   ├── mini-server.py     # Python HTTP server with REST API
+│   ├── index.html         # Main web application
+│   ├── login-screen.html  # Authentication interface
+│   ├── users.json         # User authentication storage
+│   ├── projects/          # Project data storage
+│   ├── start.sh/.bat      # Server startup scripts
+│   ├── stop.sh/.bat       # Server shutdown scripts
 │   └── *.js, *.css       # Frontend assets
+├── local/                  # 📁 Local Mode - File-based application
+│   ├── index.html         # Simplified local application
+│   ├── projects-data.js   # Local project management
+│   └── *.js, *.css       # Shared frontend assets
 ├── .gitlab-ci.yml         # CI/CD pipeline configuration
 ├── deployment.yml         # Kubernetes deployment template
 ├── docker-compose.yml     # Development Docker setup
 └── docker-compose.prod.yml # Production Docker setup
 ```
+
+## Mode Comparison
+
+| Feature | 📁 Local Mode | 🌐 Web Mode |
+|---------|---------------|-------------|
+| **Setup** | Open HTML file | Start Python server |
+| **Authentication** | None | User accounts & roles |
+| **Storage** | Direct file system | Server-managed files |
+| **Collaboration** | File sharing only | Real-time team features |
+| **Internet Required** | No | Yes (for server) |
+| **Best for** | Personal projects | Team projects |
+| **Browser Support** | Chrome/Edge 86+ | All modern browsers |
 
 
 ## Support

@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics - Fira Project Management</title>
+    <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/analytics.css">
+    <!-- Temporarily removing external CDN dependencies to test if they cause the refresh issue -->
+    <!--<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>-->
+    <script src="/projects-data.js"></script>
+    <script src="/file-system.js"></script>
+    <script src="/global-data.js"></script>
+</head>
+<body>
+    <div class="analytics-container">
+        <!-- Header Section -->
+        <div class="analytics-header">
+            <div class="header-left">
+                <button class="back-button" onclick="navigateToDashboard()">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                    </svg>
+                </button>
+                <div class="page-title">
+                    <h1>Analytics Dashboard</h1>
+                    <div class="breadcrumb">
+                        <span id="projectBreadcrumb">Project Overview</span>
+                        <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"></path>
+                        </svg>
+                        <span class="active">Analytics</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="header-right">
+                <!-- Date Range Selector -->
+                <div class="date-range-selector">
+                    <div class="date-input-group">
+                        <label for="startDate">From:</label>
+                        <input type="date" id="startDate" class="date-input">
+                    </div>
+                    <div class="date-input-group">
+                        <label for="endDate">To:</label>
+                        <input type="date" id="endDate" class="date-input">
+                    </div>
+                    <button class="apply-range-btn" id="applyDateRange">
+                        <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                        </svg>
+                        Apply
+                    </button>
+                </div>
+                
+                <!-- Export Button -->
+                <button class="export-btn" id="exportData">
+                    <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                    </svg>
+                    Export
+                </button>
+            </div>
+        </div>
+
+        <!-- Key Metrics Section -->
+        <div class="key-metrics">
+            <div class="metric-card backlog">
+                <div class="metric-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+                    </svg>
+                </div>
+                <div class="metric-content">
+                    <div class="metric-value" id="backlogCount">0</div>
+                    <div class="metric-label">Backlog Tasks</div>
+                </div>
+            </div>
+            
+            <div class="metric-card progress">
+                <div class="metric-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                    </svg>
+                </div>
+                <div class="metric-content">
+                    <div class="metric-value" id="progressCount">0</div>
+                    <div class="metric-label">In Progress</div>
+                </div>
+            </div>
+            
+            <div class="metric-card done">
+                <div class="metric-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/>
+                    </svg>
+                </div>
+                <div class="metric-content">
+                    <div class="metric-value" id="doneCount">0</div>
+                    <div class="metric-label">Completed</div>
+                </div>
+            </div>
+            
+            <div class="metric-card velocity">
+                <div class="metric-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                    </svg>
+                </div>
+                <div class="metric-content">
+                    <div class="metric-value" id="velocityValue">0</div>
+                    <div class="metric-label">Tasks/Week</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Grid -->
+        <div class="analytics-grid">
+            <!-- Team Performance Section -->
+            <div class="analytics-section team-performance">
+                <div class="section-header">
+                    <h2>Team Performance</h2>
+                    <div class="chart-controls">
+                        <button class="chart-toggle active" data-chart="velocity">Velocity</button>
+                        <button class="chart-toggle" data-chart="comparison">Comparison</button>
+                        <button class="chart-toggle" data-chart="distribution">Distribution</button>
+                    </div>
+                </div>
+                
+                <div class="chart-container">
+                    <!-- Team Velocity Chart -->
+                    <div class="chart-wrapper" id="velocityChart">
+                        <canvas id="teamVelocityChart"></canvas>
+                    </div>
+                    
+                    <!-- Planned vs Actual Chart -->
+                    <div class="chart-wrapper hidden" id="comparisonChart">
+                        <canvas id="plannedVsActualChart"></canvas>
+                    </div>
+                    
+                    <!-- Task Status Distribution -->
+                    <div class="chart-wrapper hidden" id="distributionChart">
+                        <canvas id="taskDistributionChart"></canvas>
+                    </div>
+                </div>
+                
+                <!-- Sprint Progress -->
+                <div class="sprint-progress">
+                    <div class="progress-item">
+                        <div class="progress-label">Current Sprint</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="sprintProgress" style="width: 0%"></div>
+                        </div>
+                        <div class="progress-value" id="sprintPercentage">0%</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Developer Statistics -->
+            <div class="analytics-section developer-stats">
+                <div class="section-header">
+                    <h2>Developer Statistics</h2>
+                    <div class="view-controls">
+                        <button class="view-toggle active" data-view="overview">Overview</button>
+                        <button class="view-toggle" data-view="detailed">Detailed</button>
+                    </div>
+                </div>
+                
+                <div class="developer-list" id="developerList">
+                    <!-- Developer items will be generated dynamically -->
+                </div>
+            </div>
+
+            <!-- Time Tracking Overview -->
+            <div class="analytics-section time-tracking">
+                <div class="section-header">
+                    <h2>Time Tracking Overview</h2>
+                    <button class="time-breakdown-btn" id="showTimeBreakdown">
+                        <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"></path>
+                        </svg>
+                        Details
+                    </button>
+                </div>
+                
+                <div class="time-summary-cards">
+                    <div class="time-card planned">
+                        <div class="time-card-header">
+                            <div class="time-card-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm4.2 14.2L11 13V7h1.5v5.2l4.5 2.7-.8 1.3z"/>
+                                </svg>
+                            </div>
+                            <div class="time-card-title">Total Planned</div>
+                        </div>
+                        <div class="time-card-value" id="totalPlannedTime">0h</div>
+                        <div class="time-card-trend">
+                            <span class="trend-icon" id="plannedTrendIcon">↗</span>
+                            <span class="trend-value" id="plannedTrendValue">+12%</span>
+                            <span class="trend-period" id="plannedTrendPeriod">vs last week</span>
+                        </div>
+                    </div>
+                    
+                    <div class="time-card spent">
+                        <div class="time-card-header">
+                            <div class="time-card-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm3.5 6L12 10.5 8.5 8 12 5.5 15.5 8z"/>
+                                </svg>
+                            </div>
+                            <div class="time-card-title">Total Spent</div>
+                        </div>
+                        <div class="time-card-value" id="totalSpentTime">0h</div>
+                        <div class="time-card-trend">
+                            <span class="trend-icon" id="spentTrendIcon">↘</span>
+                            <span class="trend-value" id="spentTrendValue">-3%</span>
+                            <span class="trend-period" id="spentTrendPeriod">vs estimate</span>
+                        </div>
+                    </div>
+                    
+                    <div class="time-card efficiency">
+                        <div class="time-card-header">
+                            <div class="time-card-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M3.5 18.5L5 17l6 6-1.5 1.5-6-6zM20.5 5.5L19 7l-6-6 1.5-1.5 6 6zM12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4z"/>
+                                </svg>
+                            </div>
+                            <div class="time-card-title">Efficiency</div>
+                        </div>
+                        <div class="time-card-value" id="efficiencyRatio">97%</div>
+                        <div class="time-card-trend">
+                            <span class="trend-icon" id="efficiencyTrendIcon">↗</span>
+                            <span class="trend-value" id="efficiencyTrendValue">+5%</span>
+                            <span class="trend-period" id="efficiencyTrendPeriod">improvement</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Time Breakdown Chart -->
+                <div class="time-breakdown-chart hidden" id="timeBreakdownChart">
+                    <canvas id="timeBreakdownCanvas"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="analyticsLoading">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Loading analytics data...</div>
+    </div>
+
+    <script src="/analytics.js"></script>
+</body>
+</html>
