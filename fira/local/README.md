@@ -1,6 +1,6 @@
 # Fira Local
 
-> File-based project management system for offline use with direct file system access.
+File-based application for offline use with direct file system access.
 
 ## Quick Start
 
@@ -24,7 +24,7 @@ your-projects-folder/
 ## Features
 
 - Project dashboard with statistics
-- Kanban board with drag & drop
+- Kanban board with drag and drop
 - Date calculator for release planning
 - Works offline with Chrome/Edge File System API
 

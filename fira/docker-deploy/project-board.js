@@ -17,6 +17,9 @@ class ProjectBoard {
         this.displayedTasks = 20; // Initial number of tasks to show
         this.loadIncrement = 20;  // How many more tasks to load on scroll
 
+        // Column sorting state
+        this.columnSortStates = {}; // Track sort state for each column
+
         // Path where tasks were loaded from (if known) - used to save back to same file
         this.tasksFilePath = null;
         // Currently opened task in the detail modal (used to persist edits)
@@ -662,6 +665,9 @@ class ProjectBoard {
 
         // Setup list view event listeners
         this.setupListViewEventListeners();
+
+        // Setup column sorting event listeners
+        this.setupColumnSortEventListeners();
     }
 
     cleanupEventListeners() {
@@ -682,11 +688,103 @@ class ProjectBoard {
     }
 
     generateTaskId() {
-        // Generate unique task ID for new tasks
-        const projectPrefix = this.currentProject ? this.currentProject.id.toUpperCase() : 'TSK';
-        const timestamp = Date.now().toString().slice(-6); // Last 6 digits of timestamp
-        const random = Math.random().toString(36).substr(2, 3).toUpperCase(); // 3 random chars
-        return `${projectPrefix}-${timestamp}-${random}`;
+        // Generate sequential task ID for new tasks
+        if (!this.currentProject) {
+            return 'TSK-1';
+        }
+
+        // If tasks are not loaded yet, warn and use a temporary ID
+        if (!this.tasksLoaded && this.tasks.length === 0) {
+            console.warn('⚠️ Tasks not loaded yet, generating temporary ID. This should be replaced with proper sequential ID.');
+            const timestamp = Date.now().toString().slice(-3);
+            return `${this.currentProject.id.toUpperCase()}-TEMP-${timestamp}`;
+        }
+
+        // First, try to detect the project code from existing tasks
+        let projectPrefix = this.getProjectPrefix();
+
+        // Find all existing tasks for this project that follow the sequential pattern
+        const projectTasks = this.tasks.filter(task => {
+            if (!task.id) return false;
+
+            // Check if task ID starts with the project prefix followed by a dash and number
+            const pattern = new RegExp(`^${projectPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-\\d+$`);
+            return pattern.test(task.id);
+        });
+
+        // Extract the highest number from existing task IDs
+        let maxNumber = 0;
+        projectTasks.forEach(task => {
+            const match = task.id.match(new RegExp(`^${projectPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-(\\d+)$`));
+            if (match) {
+                const number = parseInt(match[1], 10);
+                if (number > maxNumber) {
+                    maxNumber = number;
+                }
+            }
+        });
+
+        // Generate next sequential number
+        const nextNumber = maxNumber + 1;
+        const taskId = `${projectPrefix}-${nextNumber}`;
+
+        console.log(`🆔 Generated sequential task ID: ${taskId} (from ${projectTasks.length} existing tasks, max number was ${maxNumber})`);
+        return taskId;
+    }
+
+    getProjectPrefix() {
+        // Try to detect project prefix from existing tasks
+        if (this.tasks && this.tasks.length > 0) {
+            // Look for common patterns in existing task IDs
+            const patterns = {};
+
+            this.tasks.forEach(task => {
+                if (task.id) {
+                    // Extract potential prefix (everything before the last dash-number pattern)
+                    const match = task.id.match(/^([A-Z-]+)-\d+$/);
+                    if (match) {
+                        const prefix = match[1];
+                        patterns[prefix] = (patterns[prefix] || 0) + 1;
+                    }
+                }
+            });
+
+            // Find the most common prefix
+            let mostCommonPrefix = null;
+            let maxCount = 0;
+            for (const [prefix, count] of Object.entries(patterns)) {
+                if (count > maxCount) {
+                    maxCount = count;
+                    mostCommonPrefix = prefix;
+                }
+            }
+
+            if (mostCommonPrefix && maxCount > 0) {
+                console.log(`🔍 Detected project prefix: ${mostCommonPrefix} (${maxCount} tasks)`);
+                return mostCommonPrefix;
+            }
+        }
+
+        // Fallback to predefined mappings or project name
+        const projectId = this.currentProject.id.toLowerCase();
+        const prefixMap = {
+            'androidailibrary': 'AAL',
+            'gbl-commander-kmp': 'GBL-KMP',
+            'tasks': 'TSK'
+        };
+
+        const prefix = prefixMap[projectId] || this.currentProject.id.toUpperCase();
+        console.log(`🔍 Using fallback prefix: ${prefix} for project: ${projectId}`);
+        return prefix;
+    }
+
+    async generateTaskIdAsync() {
+        // Ensure tasks are loaded before generating ID
+        if (!this.tasksLoaded) {
+            console.log('🔄 Tasks not loaded yet, loading them first...');
+            await this.loadProjectTasks();
+        }
+        return this.generateTaskId();
     }
 
     async loadProjectTasks() {
@@ -1086,11 +1184,18 @@ class ProjectBoard {
         // Extra safety - deduplicate filtered tasks before rendering
         this.filteredTasks = this.deduplicateTasks(this.filteredTasks);
         console.log(`🎨 renderBoard: After deduplication ${this.filteredTasks.length} filtered tasks`);
-        
+
         const columns = ['backlog', 'progress', 'review', 'testing', 'done'];
         columns.forEach(columnId => {
             const columnContent = document.querySelector(`[data-column="${columnId}"]`);
-            const columnTasks = this.filteredTasks.filter(task => task.column === columnId);
+            let columnTasks = this.filteredTasks.filter(task => task.column === columnId);
+
+            // Apply column-specific sorting if exists
+            if (this.columnSortStates[columnId]) {
+                const sortState = this.columnSortStates[columnId];
+                columnTasks = this.sortTasksByTitle(columnTasks, sortState.direction);
+                console.log(`🔄 Applied ${sortState.direction} sorting to ${columnId} column`);
+            }
 
             // Update count in Figma header
             const countElement = document.getElementById(`${columnId}Count`);
@@ -1101,27 +1206,30 @@ class ProjectBoard {
             // Clear only task cards, preserve any existing structure
             const existingTaskCards = columnContent.querySelectorAll('.task-card');
             existingTaskCards.forEach(card => card.remove());
-            
+
             // Add or remove 'empty' class based on task count
             if (columnTasks.length === 0) {
                 columnContent.classList.add('empty');
             } else {
                 columnContent.classList.remove('empty');
             }
-            
+
             // Add task cards
             columnTasks.forEach(task => {
                 const taskCard = this.createTaskCard(task);
                 columnContent.appendChild(taskCard);
             });
         });
-        
+
+        // Restore column sort visual indicators
+        this.restoreColumnSortIndicators();
+
         // Equalize column heights after rendering
         this.equalizeColumnHeights();
-        
+
         // Setup UI permissions based on user role
         this.setupUIPermissions();
-        
+
         console.log('✅ Board rendered and permissions set');
         
         // Update analytics if in analytics view
@@ -1511,7 +1619,7 @@ class ProjectBoard {
                 const taskParam = encodeURIComponent(task.id || task.title || task.name);
                 const newUrl = `/project/${encodeURIComponent(currentParams.projectname)}/${taskParam}`;
                 
-                // Use history.replaceState to update URL without creating new history entry
+                // Use history.replaceState instead of navigateTo to avoid router triggering
                 window.history.replaceState({}, '', newUrl);
                 window.firaRouter.currentRoute = newUrl;
                 console.log('🔗 Updated URL silently for task sharing:', newUrl);
@@ -1644,17 +1752,17 @@ class ProjectBoard {
         // Update assignee dropdown with current project developers (force refresh to get latest)
         this.updateAssigneeDropdown('Unassigned', true).catch(console.error);
         
-        // Set edit mode as default
+        // Set preview mode as default
         const editBtn = document.getElementById('createEditModeBtn');
         const previewBtn = document.getElementById('createPreviewModeBtn');
         const toolbar = document.getElementById('createEditorToolbar');
         const preview = document.getElementById('createTaskDescriptionPreview');
-        
-        if (editBtn) editBtn.classList.add('active');
-        if (previewBtn) previewBtn.classList.remove('active');
-        if (toolbar) toolbar.style.display = 'flex';
-        if (preview) preview.style.display = 'none';
-        if (descriptionEditor) descriptionEditor.style.display = 'block';
+
+        if (editBtn) editBtn.classList.remove('active');
+        if (previewBtn) previewBtn.classList.add('active');
+        if (toolbar) toolbar.style.display = 'none';
+        if (preview) preview.style.display = 'block';
+        if (descriptionEditor) descriptionEditor.style.display = 'none';
     }
     
     setupCreateTaskModalEventListeners() {
@@ -2181,10 +2289,25 @@ class ProjectBoard {
                 descriptionEditor.style.display = 'none';
                 descriptionPreview.style.display = 'block';
                 taskNameInput.setAttribute('readonly', true);
-                
+
                 // Update preview with current editor content
                 descriptionPreview.innerHTML = this.convertMarkdownToHTML(descriptionEditor.value);
             });
+        }
+
+        // Set preview mode as default
+        if (previewModeBtn && editModeBtn) {
+            previewModeBtn.classList.add('active');
+            editModeBtn.classList.remove('active');
+            if (editorToolbar) editorToolbar.style.display = 'none';
+            if (descriptionEditor) descriptionEditor.style.display = 'none';
+            if (descriptionPreview) descriptionPreview.style.display = 'block';
+            if (taskNameInput) taskNameInput.setAttribute('readonly', true);
+
+            // Update preview with current editor content
+            if (descriptionPreview && descriptionEditor) {
+                descriptionPreview.innerHTML = this.convertMarkdownToHTML(descriptionEditor.value);
+            }
         }
         
         // Rich text editor toolbar - remove existing listeners first
@@ -2551,6 +2674,198 @@ class ProjectBoard {
         console.log(`✅ Selected create assignee: ${value}`);
     }
     
+    // Helper function to check if a line is already quoted
+    isLineQuoted(line) {
+        return line.trim().startsWith('> ');
+    }
+
+    // Helper function to remove quote formatting from a line
+    removeQuoteFromLine(line) {
+        return line.replace(/^\s*>\s?/, '');
+    }
+
+    // Helper function to add quote formatting to a line
+    addQuoteToLine(line) {
+        return `> ${line}`;
+    }
+
+    // Helper functions for heading formatting
+    isLineHeading(line, level) {
+        const prefix = '#'.repeat(level);
+        const trimmed = line.trim();
+        // Match exact level with optional space: ## or ## text (but not ### text)
+        return trimmed.startsWith(prefix) &&
+               (trimmed.length === prefix.length || trimmed.charAt(prefix.length) === ' ') &&
+               !trimmed.startsWith(prefix + '#');
+    }
+
+    // Helper function to remove heading formatting from a line
+    removeHeadingFromLine(line) {
+        // Remove heading markers with optional space: ## text -> text, ## -> empty string
+        return line.replace(/^\s*#+\s?/, '');
+    }
+
+    // Helper function to add heading formatting to a line
+    addHeadingToLine(line, level) {
+        const prefix = '#'.repeat(level) + ' ';
+        const cleanLine = this.removeHeadingFromLine(line);
+        return `${prefix}${cleanLine}`;
+    }
+
+    // Helper function to get current heading level of a line (returns 0 if not a heading)
+    getHeadingLevel(line) {
+        // Match headings with optional space and optional text: ## or ## text
+        const match = line.trim().match(/^(#+)(\s.*)?$/);
+        return match ? match[1].length : 0;
+    }
+
+    // Helper function to handle heading toggle
+    handleHeadingToggle(textBefore, selectedText, textAfter, targetLevel) {
+        if (!selectedText) {
+            // Find the current line
+            const allText = textBefore + textAfter;
+            const lines = allText.split('\n');
+            const currentLineIndex = textBefore.split('\n').length - 1;
+            const currentLine = lines[currentLineIndex] || '';
+
+            const currentLevel = this.getHeadingLevel(currentLine);
+
+            if (currentLevel === targetLevel) {
+                // Remove heading formatting - convert back to plain text
+                const newLine = this.removeHeadingFromLine(currentLine);
+                lines[currentLineIndex] = newLine;
+                return lines.join('\n');
+            } else {
+                // Add or change heading formatting
+                const newLine = this.addHeadingToLine(currentLine, targetLevel);
+                lines[currentLineIndex] = newLine;
+                return lines.join('\n');
+            }
+        } else {
+            // Work with selected text - split into lines
+            const selectedLines = selectedText.split('\n');
+            const allSameHeading = selectedLines.every(line => this.getHeadingLevel(line) === targetLevel);
+
+            let processedLines;
+            if (allSameHeading) {
+                // Remove heading formatting from all lines
+                processedLines = selectedLines.map(line => this.removeHeadingFromLine(line));
+            } else {
+                // Add heading formatting to all lines
+                processedLines = selectedLines.map(line => this.addHeadingToLine(line, targetLevel));
+            }
+
+            return textBefore + processedLines.join('\n') + textAfter;
+        }
+    }
+
+    // Helper function to check if a line is a list item
+    isLineListItem(line) {
+        // Check for bullet lists (-, *, +) or numbered lists (1. 2. etc.)
+        return /^\s*[-*+]\s/.test(line) || /^\s*\d+\.\s/.test(line);
+    }
+
+    // Helper function to remove list formatting from a line
+    removeListFromLine(line) {
+        return line.replace(/^\s*[-*+]\s/, '').replace(/^\s*\d+\.\s/, '');
+    }
+
+    // Helper function to handle quote toggle
+    handleQuoteToggle(textBefore, selectedText, textAfter, start, end) {
+        // If no text is selected, work with the current line
+        if (!selectedText) {
+            // Find the current line
+            const allText = textBefore + textAfter;
+            const lines = allText.split('\n');
+            const currentLineIndex = textBefore.split('\n').length - 1;
+            const currentLine = lines[currentLineIndex] || '';
+
+            if (this.isLineQuoted(currentLine)) {
+                // Remove quote from current line
+                const newLine = this.removeQuoteFromLine(currentLine);
+                lines[currentLineIndex] = newLine;
+                return lines.join('\n');
+            } else {
+                // Add quote to current line
+                const newLine = this.addQuoteToLine(currentLine);
+                lines[currentLineIndex] = newLine;
+                return lines.join('\n');
+            }
+        } else {
+            // Work with selected text - split into lines
+            const selectedLines = selectedText.split('\n');
+            const allQuoted = selectedLines.every(line => this.isLineQuoted(line));
+
+            let processedLines;
+            if (allQuoted) {
+                // Remove quotes from all lines
+                processedLines = selectedLines.map(line => this.removeQuoteFromLine(line));
+            } else {
+                // Add quotes to all lines
+                processedLines = selectedLines.map(line => this.addQuoteToLine(line));
+            }
+
+            return textBefore + processedLines.join('\n') + textAfter;
+        }
+    }
+
+    // Enhanced list insertion with toggle functionality
+    handleListInsertion(textBefore, selectedText, textAfter, listPrefix) {
+        const isOrderedList = listPrefix.includes('.');
+
+        if (!selectedText) {
+            // Find the current line
+            const allText = textBefore + textAfter;
+            const lines = allText.split('\n');
+            const currentLineIndex = textBefore.split('\n').length - 1;
+            const currentLine = lines[currentLineIndex] || '';
+
+            if (this.isLineListItem(currentLine)) {
+                // Remove list formatting from current line
+                const newLine = this.removeListFromLine(currentLine);
+                lines[currentLineIndex] = newLine;
+                return lines.join('\n');
+            } else {
+                // Add list formatting to current line
+                const prefix = isOrderedList ? '1. ' : listPrefix;
+                const newLine = `${prefix}${currentLine}`;
+                lines[currentLineIndex] = newLine;
+                return lines.join('\n');
+            }
+        } else {
+            // Work with selected text - split into lines
+            const selectedLines = selectedText.split('\n');
+            // Only check non-empty lines for list formatting
+            const nonEmptyLines = selectedLines.filter(line => line.trim() !== '');
+            const allListItems = nonEmptyLines.length > 0 && nonEmptyLines.every(line => this.isLineListItem(line));
+
+            let processedLines;
+            if (allListItems) {
+                // Remove list formatting from all lines
+                processedLines = selectedLines.map(line => {
+                    if (line.trim() === '') return line; // Keep empty lines as they are
+                    return this.removeListFromLine(line);
+                });
+            } else {
+                // Add list formatting to all non-empty lines
+                if (isOrderedList) {
+                    let counter = 1;
+                    processedLines = selectedLines.map(line => {
+                        if (line.trim() === '') return line; // Keep empty lines as they are
+                        return `${counter++}. ${line}`;
+                    });
+                } else {
+                    processedLines = selectedLines.map(line => {
+                        if (line.trim() === '') return line; // Keep empty lines as they are
+                        return `${listPrefix}${line}`;
+                    });
+                }
+            }
+
+            return textBefore + processedLines.join('\n') + textAfter;
+        }
+    }
+
     handleToolbarAction(command, editor) {
         const start = editor.selectionStart;
         const end = editor.selectionEnd;
@@ -2574,16 +2889,13 @@ class ProjectBoard {
                 cursorOffset = selectedText ? 0 : -1;
                 break;
             case 'h1':
-                replacement = selectedText ? `# ${selectedText}` : '# ';
-                cursorOffset = selectedText ? 0 : 0;
+                replacement = this.handleHeadingToggle(textBefore, selectedText, textAfter, 1);
                 break;
             case 'h2':
-                replacement = selectedText ? `## ${selectedText}` : '## ';
-                cursorOffset = selectedText ? 0 : 0;
+                replacement = this.handleHeadingToggle(textBefore, selectedText, textAfter, 2);
                 break;
             case 'h3':
-                replacement = selectedText ? `### ${selectedText}` : '### ';
-                cursorOffset = selectedText ? 0 : 0;
+                replacement = this.handleHeadingToggle(textBefore, selectedText, textAfter, 3);
                 break;
             case 'ul':
                 replacement = this.handleListInsertion(textBefore, selectedText, textAfter, '- ');
@@ -2592,8 +2904,8 @@ class ProjectBoard {
                 replacement = this.handleListInsertion(textBefore, selectedText, textAfter, '1. ');
                 break;
             case 'quote':
-                replacement = selectedText ? `> ${selectedText}` : '> ';
-                cursorOffset = selectedText ? 0 : 0;
+                replacement = this.handleQuoteToggle(textBefore, selectedText, textAfter, start, end);
+                cursorOffset = 0;
                 break;
             case 'link':
                 replacement = selectedText ? `[${selectedText}]()` : `[]()`;
@@ -2605,38 +2917,31 @@ class ProjectBoard {
                 return; // Early return - no need to process replacement
         }
         
-        // Handle complex replacements for lists only
-        if (['ul', 'ol'].includes(command)) {
+        // Handle complex replacements for lists, quotes, and headings that return full text
+        if (['ul', 'ol', 'quote', 'h1', 'h2', 'h3'].includes(command)) {
             editor.value = replacement;
-            const searchText = selectedText || 'List item';
-            const newCursorPos = replacement.indexOf(searchText);
-            if (newCursorPos !== -1) {
-                editor.setSelectionRange(newCursorPos, newCursorPos + searchText.length);
+
+            // Find the position of the affected line after replacement
+            const lines = replacement.split('\n');
+            const textBeforeLines = textBefore.split('\n');
+            const currentLineIndex = textBeforeLines.length - 1;
+
+            // Calculate cursor position at the end of the modified line
+            let cursorPos = 0;
+            for (let i = 0; i < currentLineIndex; i++) {
+                cursorPos += lines[i].length + 1; // +1 for newline
             }
+            if (currentLineIndex < lines.length) {
+                cursorPos += lines[currentLineIndex].length;
+            }
+
+            editor.setSelectionRange(cursorPos, cursorPos);
         } else {
-            // Handle all other commands including headings and quotes
-            // For headings and quotes, ensure they start on a new line if needed
-            if (['h1', 'h2', 'h3', 'quote'].includes(command)) {
-                const needsNewLineBefore = start > 0 && !textBefore.endsWith('\n');
-                const needsNewLineAfter = end < editor.value.length && !textAfter.startsWith('\n');
-                
-                const finalReplacement = 
-                    (needsNewLineBefore ? '\n' : '') + 
-                    replacement + 
-                    (needsNewLineAfter ? '\n' : '');
-                
-                editor.setRangeText(finalReplacement, start, end, 'select');
-                
-                // Position cursor appropriately
-                const newPos = start + finalReplacement.length + cursorOffset + (needsNewLineBefore ? 1 : 0);
+            // For other commands (bold, italic, code, links, images)
+            editor.setRangeText(replacement, start, end, 'select');
+            if (cursorOffset !== 0) {
+                const newPos = start + replacement.length + cursorOffset;
                 editor.setSelectionRange(newPos, newPos);
-            } else {
-                // For other commands (bold, italic, code, links, images)
-                editor.setRangeText(replacement, start, end, 'select');
-                if (cursorOffset !== 0) {
-                    const newPos = start + replacement.length + cursorOffset;
-                    editor.setSelectionRange(newPos, newPos);
-                }
             }
         }
         
@@ -2647,25 +2952,6 @@ class ProjectBoard {
         
         // Trigger input event for any listeners
         editor.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-    
-    // Helper method to ensure proper line spacing
-    ensureNewLine(text, isAfter = false) {
-        if (isAfter) {
-            return text.endsWith('\n') ? '' : '\n';
-        }
-        return text === '' || text.endsWith('\n\n') ? '' : text.endsWith('\n') ? '\n' : '\n\n';
-    }
-    
-    // Helper method for list insertion
-    handleListInsertion(textBefore, selectedText, textAfter, listPrefix) {
-        const lines = selectedText ? selectedText.split('\n') : ['List item'];
-        const listItems = lines.map((line, index) => {
-            const prefix = listPrefix.includes('1.') ? `${index + 1}. ` : listPrefix;
-            return prefix + (line.trim() || `List item ${index + 1}`);
-        }).join('\n');
-        
-        return textBefore + this.ensureNewLine(textBefore) + listItems + this.ensureNewLine(textAfter, true) + textAfter;
     }
     
     updateCharacterCounter() {
@@ -3481,6 +3767,77 @@ class ProjectBoard {
         // Removed pagination - now using infinite scroll
     }
 
+    setupColumnSortEventListeners() {
+        // Column header sorting for kanban view
+        document.addEventListener('click', (e) => {
+            const columnHeader = e.target.closest('.figma-column-header');
+            if (columnHeader) {
+                const columnName = columnHeader.getAttribute('data-column-name');
+                this.handleColumnSort(columnName);
+            }
+        });
+    }
+
+    handleColumnSort(columnName) {
+        console.log('🔄 Column sort clicked:', columnName);
+
+        // Get all column headers
+        const headers = document.querySelectorAll('.figma-column-header');
+
+        // Find the clicked header
+        const clickedHeader = document.querySelector(`[data-column-name="${columnName}"]`);
+        if (!clickedHeader) return;
+
+        // Determine sort direction
+        let sortDirection = 'asc';
+        const currentSort = this.columnSortStates[columnName];
+        if (currentSort && currentSort.direction === 'asc') {
+            sortDirection = 'desc';
+        }
+
+        // Clear all other headers' sort states
+        headers.forEach(header => {
+            header.removeAttribute('data-sort');
+        });
+
+        // Clear all other column sort states
+        this.columnSortStates = {};
+
+        // Set the sort direction on clicked header and in state
+        clickedHeader.setAttribute('data-sort', sortDirection);
+        this.columnSortStates[columnName] = { direction: sortDirection };
+
+        // Re-render the board to apply sorting
+        this.renderBoard();
+
+        console.log(`✅ Column ${columnName} sorted ${sortDirection}`);
+    }
+
+    sortTasksByTitle(tasks, direction) {
+        return tasks.sort((a, b) => {
+            const titleA = (a.title || '').trim();
+            const titleB = (b.title || '').trim();
+
+            if (direction === 'asc') {
+                return titleA.localeCompare(titleB);
+            } else {
+                return titleB.localeCompare(titleA);
+            }
+        });
+    }
+
+    restoreColumnSortIndicators() {
+        // Restore visual indicators for sorted columns after re-render
+        Object.keys(this.columnSortStates).forEach(columnName => {
+            const sortState = this.columnSortStates[columnName];
+            const header = document.querySelector(`[data-column-name="${columnName}"]`);
+            if (header && sortState) {
+                header.setAttribute('data-sort', sortState.direction);
+                console.log(`🔄 Restored ${sortState.direction} indicator for ${columnName}`);
+            }
+        });
+    }
+
     setupTimeTrackingClickHandler() {
         // Remove any existing time tracking click handler to prevent duplicates
         if (this.timeTrackingClickHandler) {
@@ -3969,8 +4326,17 @@ class ProjectBoard {
     }
 
     convertMarkdownToHTML(markdown) {
+        // Remove YAML frontmatter block
+        let cleanMarkdown = markdown;
+        if (markdown.startsWith('---')) {
+            const endIndex = markdown.indexOf('\n---\n', 3);
+            if (endIndex !== -1) {
+                cleanMarkdown = markdown.substring(endIndex + 5);
+            }
+        }
+
         // Simple markdown to HTML converter for basic formatting
-        let html = markdown
+        let html = cleanMarkdown
             // Headers
             .replace(/^### (.+)$/gm, '<h4>$1</h4>')
             .replace(/^## (.+)$/gm, '<h3>$1</h3>')
@@ -3985,6 +4351,8 @@ class ProjectBoard {
             .replace(/\*(.+?)\*/g, '<em>$1</em>')
             // Code
             .replace(/`([^`]+)`/g, '<code style="background: #f3f4f6; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 0.9em;">$1</code>')
+            // Quotes
+            .replace(/^> (.+)$/gm, '<blockquote style="border-left: 4px solid #8b5cf6; margin: 8px 0; padding: 8px 16px; background: #f8fafc; font-style: italic; color: #475569;">$1</blockquote>')
             // Lists
             .replace(/^- \[ \] (.+)$/gm, '<div style="margin: 4px 0;"><input type="checkbox" disabled style="margin-right: 8px;">$1</div>')
             .replace(/^- \[x\] (.+)$/gm, '<div style="margin: 4px 0;"><input type="checkbox" checked disabled style="margin-right: 8px;">$1</div>')
@@ -6927,6 +7295,56 @@ class AssigneeDropdownManager {
         
         console.log('📊 Chart toggle buttons setup complete');
     }
+
+    // Delete task functionality
+    async deleteTask(taskId) {
+        try {
+            console.log(`🗑️ Deleting task: ${taskId}`);
+
+            // Find the task to delete
+            const taskToDelete = this.tasks.find(task => task.id === taskId);
+            if (!taskToDelete) {
+                throw new Error(`Task ${taskId} not found`);
+            }
+
+            // Remove from tasks array
+            this.tasks = this.tasks.filter(task => task.id !== taskId);
+
+            // Delete the task file from server
+            if (this.isWebVersion && window.globalDataManager && window.globalDataManager.apiClient) {
+                console.log(`🔄 Deleting task file for ${taskId} via API`);
+                await window.globalDataManager.apiClient.deleteTask(this.currentProject.id, taskId);
+                console.log(`✅ Task file deleted successfully for ${taskId}`);
+            }
+
+            // Close task detail modal if it's open for this task
+            if (this.currentTask && this.currentTask.id === taskId) {
+                // Use global function
+                if (typeof closeTaskModal === 'function') {
+                    await closeTaskModal();
+                } else {
+                    // Fallback to direct modal close
+                    const modal = document.getElementById('taskDetailModal');
+                    if (modal) {
+                        modal.style.display = 'none';
+                        document.body.style.overflow = 'auto';
+                    }
+                    this.currentTask = null;
+                }
+            }
+
+            // Refresh the kanban board
+            this.renderBoard();
+
+            console.log(`✅ Task ${taskId} deleted successfully`);
+            return true;
+
+        } catch (error) {
+            console.error('❌ Error deleting task:', error);
+            alert(`Error deleting task: ${error.message}`);
+            return false;
+        }
+    }
 }
 
 
@@ -7028,7 +7446,7 @@ window.createNewTaskFromModal = async function() {
         }
         
         // Create task data
-        const taskId = projectBoard.generateTaskId();
+        const taskId = await projectBoard.generateTaskIdAsync();
         const taskData = {
             id: taskId,
             title: taskName,
@@ -7270,6 +7688,43 @@ ${taskData.content}`;
     } catch (error) {
         console.error('Error in createNewTaskFromModal:', error);
         alert(`Error creating task: ${error.message}`);
+    }
+};
+
+// Global delete task functions
+window.showDeleteTaskConfirmation = function() {
+    const modal = document.getElementById('deleteTaskConfirmationModal');
+    if (modal) {
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+};
+
+window.hideDeleteTaskConfirmation = function() {
+    const modal = document.getElementById('deleteTaskConfirmationModal');
+    if (modal) {
+        modal.style.display = 'none';
+        document.body.style.overflow = 'auto';
+    }
+};
+
+window.confirmDeleteTask = async function() {
+    const projectBoard = window.projectBoard;
+    if (!projectBoard || !projectBoard.currentTask) {
+        console.error('❌ ProjectBoard instance or current task not found');
+        return;
+    }
+
+    const taskId = projectBoard.currentTask.id;
+    console.log(`🗑️ Confirming delete for task: ${taskId}`);
+
+    // Hide confirmation dialog
+    window.hideDeleteTaskConfirmation();
+
+    // Delete the task
+    const success = await projectBoard.deleteTask(taskId);
+    if (success) {
+        console.log(`✅ Task ${taskId} deleted successfully`);
     }
 };
 

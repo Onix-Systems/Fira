@@ -1,7 +1,6 @@
  /**
  * Authentication checker for Fira web version
  * Runs before main application to ensure user is logged in
- * Version: 1.1 - Fixed DOM timing issues
  */
 
 (function() {
@@ -81,38 +80,16 @@
         `;
         statusEl.textContent = message;
 
-        // Wait for body to be available with additional safety checks
-        if (document.body && document.body.insertBefore) {
-            try {
-                document.body.insertBefore(statusEl, document.body.firstChild);
-            } catch (e) {
-                console.warn('⚠️ Failed to insert auth status element:', e.message);
-                // Fallback: append to document.head if body fails
-                if (document.head) {
-                    document.head.appendChild(statusEl);
-                }
-            }
+        // Wait for body to be available
+        if (document.body) {
+            document.body.insertBefore(statusEl, document.body.firstChild);
         } else {
-            // If body is not ready, wait for it
-            const insertElement = () => {
-                if (document.body && document.body.insertBefore && !document.getElementById('auth-status')) {
-                    try {
-                        document.body.insertBefore(statusEl, document.body.firstChild);
-                    } catch (e) {
-                        console.warn('⚠️ Failed to insert auth status element on DOMContentLoaded:', e.message);
-                        if (document.head) {
-                            document.head.appendChild(statusEl);
-                        }
-                    }
+            // If body is not ready, wait for DOM to load
+            document.addEventListener('DOMContentLoaded', () => {
+                if (document.body) {
+                    document.body.insertBefore(statusEl, document.body.firstChild);
                 }
-            };
-
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', insertElement);
-            } else {
-                // DOM is already loaded, try to insert immediately
-                setTimeout(insertElement, 10);
-            }
+            });
         }
 
         return statusEl;
@@ -125,32 +102,29 @@
         }
     }
     
-    // Run authentication check immediately - but wait for DOM to be ready
-    console.log('🔐 Auth-check.js v1.1 starting, readyState:', document.readyState);
-
-    const runAuthCheck = () => {
-        console.log('🔐 Running auth check, body available:', !!document.body);
+    // Run authentication check when DOM is ready
+    function runAuthCheck() {
         const statusEl = showAuthMessage('🔐 Checking authentication...');
 
         setTimeout(() => {
             const isAuthenticated = checkLoginStatus();
 
             if (isAuthenticated) {
-                statusEl.textContent = '✅ Authentication verified';
-                setTimeout(hideAuthMessage, 1000);
+            statusEl.textContent = '✅ Authentication verified';
+            setTimeout(hideAuthMessage, 1000);
             }
             // If not authenticated, page will redirect automatically
         }, 100);
-    };
+    }
 
-    // Ensure DOM is ready before showing status
+    // Run auth check when DOM is ready
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', runAuthCheck);
     } else {
         // DOM is already ready
         runAuthCheck();
     }
-    
+
     // Export for other scripts if needed
     window.FiraAuth = {
         isAuthenticated: checkLoginStatus,

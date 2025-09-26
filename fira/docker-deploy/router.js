@@ -244,30 +244,7 @@ class FiraRouter {
     }
 
     handlePopState() {
-        const newPath = window.location.pathname;
-
-        // Check if we're navigating away from a task URL and need to close the task modal
-        if (this.currentRoute && this.currentRoute.includes('/task/') ||
-            (this.currentRoute && this.currentRoute.match(/\/project\/[^\/]+\/[^\/]+$/))) {
-
-            // If navigating from task to project or dashboard, close task modal
-            if (newPath === '/' || newPath === '/dashboard' || newPath === '/app.html' ||
-                (newPath.startsWith('/project/') && !newPath.includes('/task/') && !newPath.match(/\/project\/[^\/]+\/[^\/]+$/))) {
-
-                console.log('🔄 Browser back navigation detected - closing task modal if open');
-
-                // Close task modal if it's open
-                if (window.closeTaskModal && typeof window.closeTaskModal === 'function') {
-                    const taskModal = document.getElementById('taskDetailModal');
-                    if (taskModal && taskModal.style.display === 'flex') {
-                        console.log('🔙 Closing task modal due to browser navigation');
-                        window.closeTaskModal();
-                    }
-                }
-            }
-        }
-
-        this.navigateTo(newPath, false);
+        this.navigateTo(window.location.pathname, false);
     }
 
     handleLinkClick(event) {
@@ -366,14 +343,17 @@ class FiraRouter {
             console.log(`  - Already loaded: ${!!document.querySelector(`script[src="${src}"]`)}`);
             
             const isAlreadyLoaded = !!document.querySelector(`script[src="${src}"]`);
-            const isProjectBoard = src === '../project-board.js' || src === '/project-board.js';
+            const isProjectBoard = src === '../project-board.js';
 
             // Special handling for project-board.js - always ensure it's loaded and function is available
-            if (isProjectBoard && (!isAlreadyLoaded || typeof window.initProjectBoard === 'undefined')) {
-                console.log(`🔄 Force loading project-board.js (function check: ${typeof window.initProjectBoard})`);
-                // Remove existing script if it exists but function is missing
+            if (isProjectBoard) {
+                console.log(`🔄 Project board script detected, function check: ${typeof window.initProjectBoard}`);
+                console.log(`🔄 Force loading project-board.js to ensure fresh functionality`);
+
+                // Always remove existing script and reload
                 const existingScript = document.querySelector(`script[src*="project-board.js"]`);
                 if (existingScript) {
+                    console.log('🗑️ Removing existing project-board.js script');
                     existingScript.remove();
                 }
 
@@ -384,7 +364,21 @@ class FiraRouter {
                 newScript.onload = () => {
                     console.log('✅ Project board script loaded:', typeof window.initProjectBoard);
                 };
-                newScript.onerror = () => console.error('❌ Failed to load project board script:', correctedPath);
+                newScript.onerror = () => {
+                    console.error('❌ Failed to load project board script from:', correctedPath);
+                    console.log('🔄 Trying alternative path /pages/project-board.js...');
+
+                    // Fallback to alternative path
+                    const fallbackScript = document.createElement('script');
+                    fallbackScript.src = '../project-board.js?v=' + Date.now();
+                    fallbackScript.onload = () => {
+                        console.log('✅ Project board script loaded via fallback:', typeof window.initProjectBoard);
+                    };
+                    fallbackScript.onerror = () => {
+                        console.error('❌ Failed to load project board script via fallback path');
+                    };
+                    document.head.appendChild(fallbackScript);
+                };
                 document.head.appendChild(newScript);
             } else if (src && !scriptsToSkip.includes(src) && !isAlreadyLoaded) {
                 console.log(`✅ Loading script: ${src}`);
@@ -655,10 +649,13 @@ const RouteHandlers = {
     },
 
     projectBoard: async ({ projectname }) => {
+        console.log(`🔗 Loading project: "${projectname}"`);
+
         if (window.location.protocol === 'file:') {
             window.location.href = `pages/project-board.html?project=${encodeURIComponent(projectname)}`;
             return;
         }
+
         const success = await firaRouter.loadPage('/pages/project-board.html');
         if (!success) {
             console.log('❌ Failed to load project board page - redirecting to dashboard');
@@ -676,7 +673,7 @@ const RouteHandlers = {
                 if (screen.id === 'fira-loading-screen') {
                     return;
                 }
-                
+
                 if (screen.style.display !== 'none') {
                     console.log('🧹 Hiding lingering loading screen');
                     screen.style.display = 'none';
@@ -692,58 +689,78 @@ const RouteHandlers = {
         const initTimeout = setTimeout(async () => {
             try {
                 if (!firaRouter.currentRoute || !firaRouter.currentRoute.includes('/project/')) return;
+
+                console.log('🔗 Project initialization sequence starting...');
+
+                // Step 1: Wait for DOM to be ready
                 await new Promise(r => setTimeout(r, 100));
-                
-                // Initialize global data manager with timeout protection
+
+                // Step 2: Initialize global data manager (loads projects list)
+                console.log('🔗 Step 1: Loading projects list via GlobalDataManager...');
                 if (window.globalDataManager && !window.globalDataManager.isDataLoaded()) {
                     console.log('🔄 Initializing global data manager for project page...');
-                    
+
                     // Create a race condition between initialization and timeout
                     const initPromise = window.globalDataManager.initialize();
                     const timeoutPromise = new Promise((resolve) => setTimeout(() => {
                         console.log('⚠️ Global data manager initialization timeout - proceeding anyway');
                         resolve('timeout');
                     }, 3000));
-                    
+
                     await Promise.race([initPromise, timeoutPromise]);
+                    console.log('✅ Projects list loaded successfully');
+                } else {
+                    console.log('✅ Projects list already available');
                 }
 
+                // Step 3: Initialize project board for the specific project
+                console.log('🔗 Step 2: Initializing project board for:', projectname);
                 console.log('🔍 Checking for initProjectBoard function...');
                 console.log('  initProjectBoard type:', typeof initProjectBoard);
                 console.log('  window.initProjectBoard type:', typeof window.initProjectBoard);
-                
+
                 if (typeof initProjectBoard === 'function') {
                     console.log('✅ Using global initProjectBoard');
                     await initProjectBoard(projectname);
+                    console.log('✅ Project board initialized successfully');
                 } else if (typeof window.initProjectBoard === 'function') {
                     console.log('✅ Using window.initProjectBoard');
                     await window.initProjectBoard(projectname);
+                    console.log('✅ Project board initialized successfully');
                 } else {
-                    console.log('⚠️ initProjectBoard not available, waiting...');
+                    console.log('⚠️ initProjectBoard not available, using fallback sequence');
                     // Try multiple times with increasing delays
                     let attempts = 0;
-                    const maxAttempts = 10;
+                    const maxAttempts = 20;
+
                     const tryInitProjectBoard = async () => {
                         attempts++;
-                        console.log(`🔄 Retry ${attempts}/${maxAttempts}: window.initProjectBoard type:`, typeof window.initProjectBoard);
+                        console.log(`🔄 Fallback attempt ${attempts}/${maxAttempts}: checking for initProjectBoard...`);
+
                         if (typeof window.initProjectBoard === 'function') {
-                            console.log('✅ Using delayed window.initProjectBoard');
+                            console.log('✅ initProjectBoard now available, initializing...');
                             await window.initProjectBoard(projectname);
+                            console.log('✅ Fallback initialization complete');
                         } else if (attempts < maxAttempts) {
-                            setTimeout(tryInitProjectBoard, 200 * attempts); // Increasing delay
+                            setTimeout(tryInitProjectBoard, 200);
                         } else {
                             console.error('❌ initProjectBoard still not available after all attempts');
+                            firaRouter.showError(`Failed to load project "${projectname}". Project board initialization function not found.`);
                         }
                     };
+
                     setTimeout(tryInitProjectBoard, 300);
                 }
-                
+
+                console.log('🔗 Project initialization sequence completed');
+
                 // Clear safety timeout since initialization completed normally
                 clearTimeout(safetyTimeout);
             } catch (error) {
                 // Clear safety timeout even on error
                 clearTimeout(safetyTimeout);
-                firaRouter.showError('Failed to initialize project board: ' + error.message);
+                console.error('❌ Project initialization failed:', error);
+                firaRouter.showError(`Failed to load project "${projectname}": ${error.message}`);
             }
         }, 100);
 
@@ -755,18 +772,20 @@ const RouteHandlers = {
     projectWithTask: async ({ projectname, taskId, taskname }) => {
         // Support both taskId and taskname parameters
         const taskParam = taskId || taskname;
+        console.log(`🔗 Deep link: Loading project "${projectname}" with task "${taskParam}"`);
+
         if (window.location.protocol === 'file:') {
             window.location.href = `pages/project-board.html?project=${encodeURIComponent(projectname)}&task=${encodeURIComponent(taskParam)}`;
             return;
         }
-        
+
         // CRITICAL FIX: Check if project board is already loaded for the same project
         const existingBoard = window.projectBoard;
-        const isSameProject = existingBoard && 
-            existingBoard.currentProject && 
-            existingBoard.currentProject.id === projectname && 
+        const isSameProject = existingBoard &&
+            existingBoard.currentProject &&
+            existingBoard.currentProject.id === projectname &&
             existingBoard.tasksLoaded;
-        
+
         if (isSameProject) {
             console.log('✅ Project board already loaded, skipping loadPage to prevent flash');
             // Just open the task without loading the page
@@ -779,7 +798,7 @@ const RouteHandlers = {
             }
             return;
         }
-        
+
         // Only load page if it's a different project or first time
         console.log('🔄 Loading project board page for new project:', projectname);
         const success = await firaRouter.loadPage('/pages/project-board.html');
@@ -792,16 +811,28 @@ const RouteHandlers = {
         const initTimeout = setTimeout(async () => {
             try {
                 if (!firaRouter.currentRoute || !firaRouter.currentRoute.includes('/project/')) return;
-                await new Promise(r => setTimeout(r, 100));
-                if (window.globalDataManager && !window.globalDataManager.isDataLoaded()) await window.globalDataManager.initialize();
 
-                // Check if project board already exists and is for the same project
+                console.log('🔗 Deep link initialization sequence starting...');
+
+                // Step 1: Wait for DOM to be ready
+                await new Promise(r => setTimeout(r, 100));
+
+                // Step 2: Initialize global data manager (loads projects list)
+                console.log('🔗 Step 1: Loading projects list via GlobalDataManager...');
+                if (window.globalDataManager && !window.globalDataManager.isDataLoaded()) {
+                    await window.globalDataManager.initialize();
+                    console.log('✅ Projects list loaded successfully');
+                } else {
+                    console.log('✅ Projects list already available');
+                }
+
+                // Step 3: Check if project board already exists and is for the same project
                 const existingBoard = window.projectBoard;
-                const isSameProject = existingBoard && 
-                    existingBoard.currentProject && 
-                    existingBoard.currentProject.id === projectname && 
+                const isSameProject = existingBoard &&
+                    existingBoard.currentProject &&
+                    existingBoard.currentProject.id === projectname &&
                     existingBoard.tasksLoaded;
-                
+
                 if (isSameProject) {
                     console.log('✅ Project board already loaded for same project, just opening task:', taskParam);
                     // Just open the task without reinitializing the board
@@ -814,30 +845,47 @@ const RouteHandlers = {
                     }
                     return; // CRITICAL: Exit early to prevent any board reinitialization
                 } else {
-                    console.log('🔄 Need to initialize project board with task:', taskParam);
-                    // Initialize project board with both project and task parameters
+                    // Step 4: Initialize project board for the specific project
+                    console.log('🔗 Step 2: Initializing project board for:', projectname);
+
                     if (typeof initProjectBoard === 'function') {
                         console.log('✅ Using global initProjectBoard with task:', taskParam);
                         await initProjectBoard(projectname, taskParam);
+                        console.log('✅ Project board initialized and task opened via initProjectBoard');
                     } else if (typeof window.initProjectBoard === 'function') {
                         console.log('✅ Using window.initProjectBoard with task:', taskParam);
                         await window.initProjectBoard(projectname, taskParam);
+                        console.log('✅ Project board initialized and task opened via window.initProjectBoard');
                     } else {
-                        console.log('⚠️ initProjectBoard not available, falling back to openTaskById');
-                        // Fallback to openTaskById
-                        if (typeof openTaskById === 'function') {
-                            openTaskById(taskParam);
-                        } else if (typeof window.openTaskById === 'function') {
-                            window.openTaskById(taskParam);
-                        } else {
-                            setTimeout(() => {
-                                if (typeof window.openTaskById === 'function') window.openTaskById(taskParam);
-                            }, 500);
-                        }
+                        console.log('⚠️ initProjectBoard not available, using fallback sequence');
+                        // Fallback: Initialize project board first, then open task
+                        let attempts = 0;
+                        const maxAttempts = 20;
+
+                        const initProjectBoardFallback = async () => {
+                            attempts++;
+                            console.log(`🔄 Fallback attempt ${attempts}/${maxAttempts}: checking for initProjectBoard...`);
+
+                            if (typeof window.initProjectBoard === 'function') {
+                                console.log('✅ initProjectBoard now available, initializing...');
+                                await window.initProjectBoard(projectname, taskParam);
+                                console.log('✅ Fallback initialization complete');
+                            } else if (attempts < maxAttempts) {
+                                setTimeout(initProjectBoardFallback, 200);
+                            } else {
+                                console.error('❌ initProjectBoard still not available after all attempts');
+                                firaRouter.showError(`Failed to load project "${projectname}". Project board initialization function not found.`);
+                            }
+                        };
+
+                        setTimeout(initProjectBoardFallback, 300);
                     }
                 }
+
+                console.log('🔗 Deep link initialization sequence completed');
             } catch (error) {
-                firaRouter.showError('Failed to initialize task: ' + error.message);
+                console.error('❌ Deep link initialization failed:', error);
+                firaRouter.showError(`Failed to load project "${projectname}" with task "${taskParam}": ${error.message}`);
             }
         }, 100);
 
@@ -905,42 +953,34 @@ const RouteHandlers = {
 
 // Navigation functions already defined at the top of the file
 
-// Initialize router and define routes
-document.addEventListener('DOMContentLoaded', () => {
+// Router initialization function
+function initializeFiraRouter() {
     console.log('🔄 Initializing router...');
     firaRouter = new FiraRouter();
 
-    firaRouter.addRoute('/', RouteHandlers.dashboard);
-    firaRouter.addRoute('/dashboard', RouteHandlers.dashboard);
-    firaRouter.addRoute('/app.html', RouteHandlers.dashboard); // Redirect legacy login target to dashboard
-    firaRouter.addRoute('/analytics', RouteHandlers.analytics);
-    firaRouter.addRoute('/project/:projectname', RouteHandlers.projectBoard);
+    // Register routes in order of specificity (most specific first)
     firaRouter.addRoute('/project/:projectname/task/:taskId', RouteHandlers.projectWithTask);
     firaRouter.addRoute('/project/:projectname/:taskname', RouteHandlers.projectWithTask);
+    firaRouter.addRoute('/project/:projectname', RouteHandlers.projectBoard);
+    firaRouter.addRoute('/dashboard', RouteHandlers.dashboard);
+    firaRouter.addRoute('/analytics', RouteHandlers.analytics);
+    firaRouter.addRoute('/', RouteHandlers.dashboard);
 
     firaRouter.start();
-    console.log('✅ Router initialized and started');
-    
+    console.log('✅ Router initialized with deep link support');
+    console.log('  - /project/:projectname/:taskname → Load project and open specific task');
+    console.log('  - /project/:projectname/task/:taskId → Alternative task URL format');
+    console.log('  - /project/:projectname → Load project without specific task');
+
     // Make sure router is globally available
     window.firaRouter = firaRouter;
-});
+}
+
+// Initialize router when DOM is ready
+document.addEventListener('DOMContentLoaded', initializeFiraRouter);
 
 // Also initialize immediately if DOM is already loaded
 if (document.readyState !== 'loading') {
     console.log('🔄 DOM already loaded, initializing router immediately...');
-    firaRouter = new FiraRouter();
-
-    firaRouter.addRoute('/', RouteHandlers.dashboard);
-    firaRouter.addRoute('/dashboard', RouteHandlers.dashboard);
-    firaRouter.addRoute('/app.html', RouteHandlers.dashboard); // Redirect legacy login target to dashboard
-    firaRouter.addRoute('/analytics', RouteHandlers.analytics);
-    firaRouter.addRoute('/project/:projectname', RouteHandlers.projectBoard);
-    firaRouter.addRoute('/project/:projectname/task/:taskId', RouteHandlers.projectWithTask);
-    firaRouter.addRoute('/project/:projectname/:taskname', RouteHandlers.projectWithTask);
-
-    firaRouter.start();
-    console.log('✅ Router initialized and started (immediate)');
-    
-    // Make sure router is globally available
-    window.firaRouter = firaRouter;
+    initializeFiraRouter();
 }

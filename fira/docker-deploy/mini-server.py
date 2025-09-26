@@ -196,10 +196,10 @@ class ProjectManager:
             for col in columns:
                 col_path = project_path / col
                 col_path.mkdir(parents=True, exist_ok=True)
-                # Створюємо папку розробника для всіх колонок крім backlog
-                if col != 'backlog':
-                    dev_path = col_path / default_dev
-                    dev_path.mkdir(parents=True, exist_ok=True)
+                # Створюємо папку розробника для всіх колонок включаючи backlog
+                # Це виправляє проблему з переміщенням тасок з однаковими іменами
+                dev_path = col_path / default_dev
+                dev_path.mkdir(parents=True, exist_ok=True)
 
             print(f"Created standard project folders: {', '.join(columns)}")
             return True, None
@@ -286,12 +286,12 @@ class ProjectManager:
                     task_files = [f for f in folder_path.glob('*.md') if f.name.lower() != 'readme.md']
                     total_tasks += len(task_files)
 
-                    # Count files in developer subfolders
-                    if folder in ['progress', 'inprogress']:
-                        for dev_folder in folder_path.iterdir():
-                            if dev_folder.is_dir() and not dev_folder.name.lower().startswith('readme'):
-                                dev_tasks = [f for f in dev_folder.glob('*.md') if f.name.lower() != 'readme.md']
-                                total_tasks += len(dev_tasks)
+                    # Count files in developer subfolders for all status including backlog
+                    for dev_folder in folder_path.iterdir():
+                        if dev_folder.is_dir() and not dev_folder.name.lower().startswith('readme'):
+                            dev_tasks = [f for f in dev_folder.glob('*.md') if f.name.lower() != 'readme.md']
+                            total_tasks += len(dev_tasks)
+                            if folder in ['progress', 'inprogress']:
                                 developers.add(dev_folder.name)
 
             stats[stat_key]['count'] = total_tasks
@@ -1777,10 +1777,15 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
             return False
 
         task_id = task_data['id']
+        print(f"🔄 update_task_file: Processing task {task_id} for project {project_id}")
 
         # Find current task file location
         current_file = None
         current_folder = None
+        current_developer = None
+
+        # КРИТИЧНО: шукати ТІЛЬКИ файл з правильним ID і змістом
+        print(f"🔍 Шукаємо файл для task_id: {task_id}")
 
         for folder in ['backlog', 'progress', 'inprogress', 'review', 'testing', 'done']:
             folder_path = project_path / folder
@@ -1788,36 +1793,94 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                 # Check direct files
                 task_file = folder_path / f"{task_id}.md"
                 if task_file.exists():
-                    current_file = task_file
-                    current_folder = folder
-                    break
+                    # ПЕРЕВІРЯЄМО ЧИ ЦЕЙ ФАЙЛ ДІЙСНо МАЄ ПРАВИЛЬНИЙ ID
+                    try:
+                        file_content = task_file.read_text(encoding='utf-8')
+                        if task_id in file_content or task_id in str(task_file.name):
+                            current_file = task_file
+                            current_folder = folder
+                            current_developer = None  # Файл в головній папці, без розробника
+                            print(f"📍 Found VERIFIED task file in direct folder: {task_file}")
+                            break
+                        else:
+                            print(f"⚠️ Файл {task_file} існує але НЕ МІСТИТЬ task_id {task_id}")
+                    except Exception as e:
+                        print(f"⚠️ Помилка читання файлу {task_file}: {e}")
 
                 # Check developer subfolders (for all folders)
                 for dev_folder in folder_path.iterdir():
                     if dev_folder.is_dir() and not dev_folder.name.startswith('.'):
                         task_file = dev_folder / f"{task_id}.md"
                         if task_file.exists():
-                            current_file = task_file
-                            current_folder = folder
-                            break
+                            # ПЕРЕВІРЯЄМО ЧИ ЦЕЙ ФАЙЛ ДІЙСНо МАЄ ПРАВИЛЬНИЙ ID
+                            try:
+                                file_content = task_file.read_text(encoding='utf-8')
+                                if task_id in file_content or task_id in str(task_file.name):
+                                    current_file = task_file
+                                    current_folder = folder
+                                    current_developer = dev_folder.name
+                                    print(f"📍 Found VERIFIED task file in developer subfolder: {task_file}")
+                                    print(f"   Current developer: {current_developer}")
+                                    break
+                                else:
+                                    print(f"⚠️ Файл {task_file} існує але НЕ МІСТИТЬ task_id {task_id}")
+                            except Exception as e:
+                                print(f"⚠️ Помилка читання файлу {task_file}: {e}")
+                    if current_file:
+                        break
                 if current_file:
                     break
 
         if not current_file:
-            print(f"Task file not found: {task_id}")
+            print(f"❌ Task file not found: {task_id}")
             return False
 
         # Determine new location based on task status
         new_status = task_data.get('status', task_data.get('column', 'backlog'))
         new_developer = task_data.get('developer')
 
+        # КРИТИЧНО: Якщо розробник не вказано, спробуємо визначити з поточного розташування
+        if not new_developer and current_developer:
+            new_developer = current_developer
+            print(f"🔍 АВТОМАТИЧНО збережено поточного розробника: {new_developer}")
+        elif not new_developer:
+            # Спробуємо визначити з assignee поля
+            assignee = task_data.get('assignee')
+            if assignee and (assignee.startswith('dev-') or assignee.startswith('tech-')):
+                new_developer = assignee
+                print(f"🔍 АВТОМАТИЧНО визначено розробника з assignee: {new_developer}")
+
+        print(f"📋 Task movement: {task_id} from {current_folder} to {new_status} (dev: {new_developer})")
+        print(f"🔍 ДЕТАЛІ ПЕРЕМІЩЕННЯ:")
+        print(f"  Current file: {current_file}")
+        print(f"  Task data keys: {list(task_data.keys())}")
+        print(f"  Developer from task_data: {repr(task_data.get('developer'))}")
+        print(f"  Assignee from task_data: {repr(task_data.get('assignee'))}")
+        print(f"  Final new_developer: {repr(new_developer)}")
+
         # Calculate new path
         new_folder_path = project_path / new_status
-        if new_developer and new_status in ['progress', 'inprogress', 'review', 'testing', 'done']:
+        # Додаємо підтримку папок девелоперів для всіх статусів включаючи backlog
+        if new_developer and new_status in ['backlog', 'progress', 'inprogress', 'review', 'testing', 'done']:
             new_folder_path = new_folder_path / new_developer
 
         new_folder_path.mkdir(parents=True, exist_ok=True)
         new_task_file = new_folder_path / f"{task_id}.md"
+
+        # CRITICAL FIX: Verify that we're only working with the specific task file
+        # Check if the new file path would overwrite a different task
+        if new_task_file.exists() and str(new_task_file) != str(current_file):
+            # Read existing file to check if it's the same task
+            try:
+                existing_content = new_task_file.read_text(encoding='utf-8')
+                # Simple check: if it contains the same task ID in title or content
+                if f"{task_id}" not in existing_content and task_id not in str(new_task_file.name):
+                    print(f"⚠️ WARNING: Destination file {new_task_file} exists but appears to be a different task!")
+                    print(f"⚠️ Aborting update to prevent overwriting other tasks")
+                    return False
+            except Exception as e:
+                print(f"⚠️ Could not verify destination file safety: {e}")
+                return False
 
         # Build updated file content (simplified YAML)
         def simple_yaml_dump(data):
@@ -1859,13 +1922,40 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         # If location changed, move the file
         if str(new_task_file) != str(current_file):
-            # Remove old file
-            current_file.unlink()
-            print(f"🚚 Moved task {task_id} from {current_folder} to {new_status}")
+            # Double-check file paths before proceeding
+            print(f"🔍 File movement verification:")
+            print(f"  Current file: {current_file}")
+            print(f"  New file: {new_task_file}")
+            print(f"  Task ID: {task_id}")
+
+            # CRITICAL SAFETY CHECK: Ensure we're only deleting the correct file
+            if current_file.exists():
+                try:
+                    # Verify the current file actually contains this task ID
+                    current_content = current_file.read_text(encoding='utf-8')
+                    if task_id not in current_content and task_id not in str(current_file.name):
+                        print(f"❌ SAFETY ABORT: Current file doesn't contain task {task_id}")
+                        return False
+
+                    # Remove old file ONLY after verification
+                    current_file.unlink()
+                    print(f"✅ Safely removed old file: {current_file}")
+                    print(f"🚚 Moved task {task_id} from {current_folder} to {new_status}")
+                except Exception as e:
+                    print(f"❌ Error during file movement verification: {e}")
+                    return False
+            else:
+                print(f"⚠️ Current file {current_file} no longer exists")
 
         # Write updated content to new location
-        new_task_file.write_text(file_content, encoding='utf-8')
-        print(f"Updated task file: {new_task_file}")
+        try:
+            print(f"📝 Writing content to: {new_task_file}")
+            print(f"📊 Content size: {len(file_content)} characters")
+            new_task_file.write_text(file_content, encoding='utf-8')
+            print(f"✅ Successfully updated task file: {new_task_file}")
+        except Exception as e:
+            print(f"❌ Error writing task file: {e}")
+            return False
 
         return True
 

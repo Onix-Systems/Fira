@@ -85,10 +85,15 @@
             <div class="kanban-columns">
                 <!-- Backlog Column -->
                 <div class="kanban-column" data-column="backlog">
-                    <div class="figma-column-header">
+                    <div class="figma-column-header" data-column-name="backlog">
                         <h3 class="figma-column-title">Backlog</h3>
-                        <div class="figma-task-count">
-                            <span class="figma-count-number" id="backlogCount">0</span>
+                        <div class="figma-header-right">
+                            <svg class="column-sort-arrow" width="12" height="8" viewBox="0 0 12 8" fill="currentColor">
+                                <path d="M1 1.5L6 6.5L11 1.5"/>
+                            </svg>
+                            <div class="figma-task-count">
+                                <span class="figma-count-number" id="backlogCount">0</span>
+                            </div>
                         </div>
                     </div>
                     <div class="column-content" data-column="backlog">
@@ -98,10 +103,15 @@
 
                 <!-- In Progress Column -->
                 <div class="kanban-column" data-column="progress">
-                    <div class="figma-column-header">
+                    <div class="figma-column-header" data-column-name="progress">
                         <h3 class="figma-column-title">In Progress</h3>
-                        <div class="figma-task-count">
-                            <span class="figma-count-number" id="progressCount">0</span>
+                        <div class="figma-header-right">
+                            <svg class="column-sort-arrow" width="12" height="8" viewBox="0 0 12 8" fill="currentColor">
+                                <path d="M1 1.5L6 6.5L11 1.5"/>
+                            </svg>
+                            <div class="figma-task-count">
+                                <span class="figma-count-number" id="progressCount">0</span>
+                            </div>
                         </div>
                     </div>
                     <div class="column-content" data-column="progress">
@@ -111,10 +121,15 @@
 
                 <!-- Review Column -->
                 <div class="kanban-column" data-column="review">
-                    <div class="figma-column-header">
+                    <div class="figma-column-header" data-column-name="review">
                         <h3 class="figma-column-title">Review</h3>
-                        <div class="figma-task-count">
-                            <span class="figma-count-number" id="reviewCount">0</span>
+                        <div class="figma-header-right">
+                            <svg class="column-sort-arrow" width="12" height="8" viewBox="0 0 12 8" fill="currentColor">
+                                <path d="M1 1.5L6 6.5L11 1.5"/>
+                            </svg>
+                            <div class="figma-task-count">
+                                <span class="figma-count-number" id="reviewCount">0</span>
+                            </div>
                         </div>
                     </div>
                     <div class="column-content" data-column="review">
@@ -124,10 +139,15 @@
 
                 <!-- Testing Column -->
                 <div class="kanban-column" data-column="testing">
-                    <div class="figma-column-header">
+                    <div class="figma-column-header" data-column-name="testing">
                         <h3 class="figma-column-title">Testing</h3>
-                        <div class="figma-task-count">
-                            <span class="figma-count-number" id="testingCount">0</span>
+                        <div class="figma-header-right">
+                            <svg class="column-sort-arrow" width="12" height="8" viewBox="0 0 12 8" fill="currentColor">
+                                <path d="M1 1.5L6 6.5L11 1.5"/>
+                            </svg>
+                            <div class="figma-task-count">
+                                <span class="figma-count-number" id="testingCount">0</span>
+                            </div>
                         </div>
                     </div>
                     <div class="column-content" data-column="testing">
@@ -137,10 +157,15 @@
 
                 <!-- Done Column -->
                 <div class="kanban-column" data-column="done">
-                    <div class="figma-column-header">
+                    <div class="figma-column-header" data-column-name="done">
                         <h3 class="figma-column-title">Done</h3>
-                        <div class="figma-task-count">
-                            <span class="figma-count-number" id="doneCount">0</span>
+                        <div class="figma-header-right">
+                            <svg class="column-sort-arrow" width="12" height="8" viewBox="0 0 12 8" fill="currentColor">
+                                <path d="M1 1.5L6 6.5L11 1.5"/>
+                            </svg>
+                            <div class="figma-task-count">
+                                <span class="figma-count-number" id="doneCount">0</span>
+                            </div>
                         </div>
                     </div>
                     <div class="column-content" data-column="done">
@@ -414,6 +439,9 @@
                         Project Name / KMP-123
                     </div>
                 </div>
+                <button class="delete-task-button" id="deleteTaskBtn" onclick="showDeleteTaskConfirmation()">
+                    <img src="res/icons/delete_icon.png" alt="Delete" width="18" height="18">
+                </button>
             </div>
 
             <!-- Modal Content -->
@@ -807,8 +835,8 @@
                     <div class="description-header">
                         <label class="field-label">Description:</label>
                         <div class="edit-preview-buttons">
-                            <button class="mode-btn active" id="createEditModeBtn">Edit</button>
-                            <button class="mode-btn" id="createPreviewModeBtn">Preview</button>
+                            <button class="mode-btn" id="createEditModeBtn">Edit</button>
+                            <button class="mode-btn active" id="createPreviewModeBtn">Preview</button>
                         </div>
                     </div>
                     
@@ -1083,7 +1111,7 @@
             const projectTitle = document.querySelector('.project-title h1');
             if (projectTitle) {
                 const infoButton = document.createElement('button');
-                infoButton.innerHTML = '<img src="../res/icons/info_icon.png" alt="Info" width="16" height="16" />';
+                infoButton.innerHTML = '<img src="/res/icons/info_icon.png" alt="Info" width="16" height="16" />';
                 infoButton.style.cssText = `
                     margin-left: 10px;
                     padding: 4px;
@@ -1129,6 +1157,25 @@
             console.log('Time tracking will be handled by project-board.js setupTimeTrackingClickHandler');
         }, 1000);
     </script>
+
+    <!-- Delete Task Confirmation Dialog -->
+    <div class="modal delete-confirmation-modal" id="deleteTaskConfirmationModal" style="display: none;">
+        <div class="modal-backdrop"></div>
+        <div class="modal-container">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Delete task</h2>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to delete this task? This action cannot be undone.</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="hideDeleteTaskConfirmation()">Cancel</button>
+                    <button class="btn btn-danger" onclick="confirmDeleteTask()">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Back button navigation is handled by project-board.js -->
 </body>

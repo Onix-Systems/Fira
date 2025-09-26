@@ -6,9 +6,10 @@
 
 Visual Kanban project management with task tracking and team collaboration.
 
-Fira offers two deployment modes:
-- **🌐 Web Mode** - Server-based with user authentication and team collaboration
-- **📁 Local Mode** - Offline file-based project management for personal use
+Fira offers three deployment modes:
+- **Web Mode** - Server-based with user authentication and team collaboration
+- **Local Mode** - Offline file-based project management for personal use
+- **Docker Deploy** - Production deployment with Nginx reverse proxy and containerization
 
 ## Features
 
@@ -20,7 +21,7 @@ Fira offers two deployment modes:
 
 ## Quick Start
 
-### 📁 Local Mode (Offline, No Server Required)
+### Local Mode (Offline, No Server Required)
 
 Perfect for personal project management with direct file system access.
 
@@ -45,7 +46,7 @@ python -m http.server 8080
 - Works completely offline, no server needed
 - Direct file system access for easy backup/sync
 
-### 🌐 Web Mode (Server-based with Authentication)
+### Web Mode (Server-based with Authentication)
 
 Full-featured server for team collaboration and multi-user access.
 
@@ -70,7 +71,7 @@ start.bat     # Windows
 - Projects stored in `fira/web/projects/` directory
 - Team collaboration features
 
-### 🐳 Docker Deployment
+### Docker Deployment
 
 **[📖 Complete Docker Deployment Guide](fira/docker-deploy/README.md)**
 
@@ -147,19 +148,9 @@ CONTAINER_PORT: "8080"
 
 ```
 fira/
-├── web/                    # 🌐 Web Mode - Server-based application
-│   ├── mini-server.py     # Python HTTP server with REST API
-│   ├── index.html         # Main web application
-│   ├── login-screen.html  # Authentication interface
-│   ├── users.json         # User authentication storage
-│   ├── projects/          # Project data storage
-│   ├── start.sh/.bat      # Server startup scripts
-│   ├── stop.sh/.bat       # Server shutdown scripts
-│   └── *.js, *.css       # Frontend assets
-├── local/                  # 📁 Local Mode - File-based application
-│   ├── index.html         # Simplified local application
-│   ├── projects-data.js   # Local project management
-│   └── *.js, *.css       # Shared frontend assets
+├── web/                    # Server-based application with authentication and multi-user support
+├── local/                  # File-based application for offline use with direct file system access
+├── docker-deploy/          # Production Docker deployment with Nginx reverse proxy
 ├── .gitlab-ci.yml         # CI/CD pipeline configuration
 ├── deployment.yml         # Kubernetes deployment template
 ├── docker-compose.yml     # Development Docker setup
@@ -168,7 +159,7 @@ fira/
 
 ## Mode Comparison
 
-| Feature | 📁 Local Mode | 🌐 Web Mode |
+| Feature | Local Mode | Web Mode |
 |---------|---------------|-------------|
 | **Setup** | Open HTML file | Start Python server |
 | **Authentication** | None | User accounts & roles |

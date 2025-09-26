@@ -1,6 +1,6 @@
 # Fira Web
 
-> Production project management system with authentication and server API.
+Server-based application with authentication and multi-user support.
 
 ## Quick Start
 
@@ -31,7 +31,7 @@ python mini-server.py
 
 - User authentication and sessions
 - Project management with file system
-- Kanban board with full CRUD
+- Kanban board with full CRUD operations
 - Analytics dashboard
 - Release date calculator
 - Admin panel at `/admin/`
@@ -64,11 +64,4 @@ projects/
 │   ├── review/
 │   ├── testing/
 │   └── done/dev-name/
-```
-
-## Docker
-
-```bash
-docker build -t fira-web .
-docker run -p 8080:8080 fira-web
 ```
