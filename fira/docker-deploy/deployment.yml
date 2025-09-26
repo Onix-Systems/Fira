@@ -1,0 +1,63 @@
+---
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: ${CI_PROJECT_NAME}
+  namespace: ${K8S_NAMESPACE}
+spec:
+  selector:
+    matchLabels:
+      app: ${CI_PROJECT_NAME}
+  template:
+    metadata:
+      labels:
+        app: ${CI_PROJECT_NAME}
+    spec:
+      containers:
+        - name: ${CI_PROJECT_NAME}
+          image: ${DOCKER_REPOSITORY_IMAGE}
+          ports:
+            - containerPort: ${CONTAINER_PORT}
+          envFrom:
+            - secretRef:
+                name: env-secrets
+      imagePullSecrets:
+        - name: gitlab-registry
+
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: ${CI_PROJECT_NAME}
+  namespace: ${K8S_NAMESPACE}
+spec:
+  selector:
+    app: ${CI_PROJECT_NAME}
+  ports:
+    - protocol: TCP
+      port: ${CONTAINER_PORT}
+      targetPort: ${CONTAINER_PORT}
+
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: ${CI_PROJECT_NAME}
+  namespace: ${K8S_NAMESPACE}
+  annotations:
+    ingress.kubernetes.io/ssl-redirect: "true"
+    kubernetes.io/tls-acme: "true"
+    certmanager.k8s.io/cluster-issuer: letsencrypt-prod
+    kubernetes.io/ingress.class: "nginx"
+spec:
+  tls:
+    - hosts:
+        - ${K8S_HOSTNAME}
+      secretName: ssl-cert
+  rules:
+    - host: ${K8S_HOSTNAME}
+      http:
+        paths:
+          - backend:
+              serviceName: ${CI_PROJECT_NAME}
+              servicePort: ${CONTAINER_PORT}

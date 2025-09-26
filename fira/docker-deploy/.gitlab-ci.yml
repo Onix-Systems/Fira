@@ -1,0 +1,34 @@
+image:
+  name: python:3.11-alpine
+
+variables:
+  PYTHON_IMAGE: python:3.11-alpine
+
+stages:
+  - build
+  - deploy
+
+webBuild:
+  stage: build
+  only:
+    - fira
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - docker login -u gitlab-ci-token -p ${CI_JOB_TOKEN} ${CI_REGISTRY}
+    - docker build --network=host -f web/Dockerfile -t ${DOCKER_REPOSITORY_IMAGE} .
+    - docker push ${DOCKER_REPOSITORY_IMAGE}
+
+webDeploy:
+  stage: deploy
+  only:
+    - fira
+  image: $DEPLOY_DOCKER_IMAGE
+  script: |
+    echo "Hostname: ${K8S_HOSTNAME}"
+    echo "Namespace: ${K8S_NAMESPACE}"
+    echo "Container Port: ${CONTAINER_PORT}"
+    grdp-ctl
+    kubectl get pods -n ${K8S_NAMESPACE}
+    kubectl get ingress -n ${K8S_NAMESPACE}
