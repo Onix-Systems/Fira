@@ -21,49 +21,39 @@ Fira offers three deployment modes:
 
 ## Quick Start
 
-### Local Mode (Offline, No Server Required)
+### Local Mode
 
 Perfect for personal project management with direct file system access.
 
 ```bash
-# 1. Clone repository
-git clone https://github.com/Onix-Systems/Fira.git
-cd Fira
+# 1. Download latest release
+wget https://github.com/Onix-Systems/Fira/releases/download/v1.0.0/fira-v1.0.0.zip
+unzip fira-v1.0.0.zip
+cd fira-v1.0.0
 
-# 2. Open local version
+# 2. Choose startup method:
+
+# Option A: Direct file access (fira/local)
 cd fira/local
-# Option A: Open index.html directly in Chrome/Edge 86+
-# Option B: Serve via Python
-python -m http.server 8080
+# Open index.html directly in Chrome/Edge 86+
+
+# Option B: Simple server (fira/local)
+cd fira/local
+./start.sh    # Linux/Mac
+start.bat     # Windows
 # Then visit http://localhost:8080
 ```
 
 **Requirements:** Chrome/Edge 86+ (uses File System Access API)
 
 **How it works:**
-- Click "Choose Folder" to select your projects directory
+- **Option A**: Direct file access - open index.html in browser, click "Choose Folder" to select projects directory
+- **Option B**: Simple server - starts local HTTP server, works with any modern browser
 - Projects stored as folders with markdown task files
 - Works completely offline, no server needed
 - Direct file system access for easy backup/sync
 
-### Web Mode (Server-based with Authentication)
-
-Full-featured server for team collaboration and multi-user access.
-
-```bash
-# 1. Clone repository
-git clone https://github.com/Onix-Systems/Fira.git
-cd Fira
-
-# 2. Start web server
-cd fira/web
-./start.sh    # Linux/Mac
-start.bat     # Windows
-
-# 3. Open browser at http://localhost:8080
-```
-
-**Requirements:** Python 3.7+ (auto-detected)
+**Requirements:** Python 3.7+
 
 **How it works:**
 - Python HTTP server with REST API
@@ -78,9 +68,10 @@ start.bat     # Windows
 Quick Docker setup:
 
 ```bash
-# 1. Clone repository
-git clone https://github.com/Onix-Systems/Fira.git
-cd Fira
+# 1. Download latest release
+wget https://github.com/Onix-Systems/Fira/releases/download/v1.0.0/fira-v1.0.0.zip
+unzip fira-v1.0.0.zip
+cd fira-v1.0.0
 
 # 2. Build and run
 cd fira/docker-deploy
