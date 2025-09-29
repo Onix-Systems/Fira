@@ -63,8 +63,6 @@ start.bat     # Windows
 
 ### Docker Deployment
 
-**[📖 Complete Docker Deployment Guide](fira/docker-deploy/README.md)**
-
 Quick Docker setup:
 
 ```bash
