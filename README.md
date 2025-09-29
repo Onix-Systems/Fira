@@ -89,6 +89,4 @@ For production deployment, Kubernetes, CI/CD pipelines, and troubleshooting, see
 
 
 ## Support
-
-- Create an issue in this repository
 - Contact: denys.kramar@onix-systems.com
