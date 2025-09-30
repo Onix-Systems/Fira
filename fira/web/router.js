@@ -126,7 +126,7 @@ class FiraRouter {
         console.log('Navigating to:', path);
 
         if (pushState && window.location.pathname !== path) {
-            window.history.pushState({}, '', path);
+            window.history.pushState({ path: path }, '', path);
         }
 
         this.currentRoute = path;
@@ -243,8 +243,16 @@ class FiraRouter {
         return params;
     }
 
-    handlePopState() {
-        this.navigateTo(window.location.pathname, false);
+    handlePopState(event) {
+        console.log('🔙 Browser back/forward button pressed');
+        console.log('  Current pathname:', window.location.pathname);
+        console.log('  History state:', event.state);
+
+        // Get the path from history state or fallback to current pathname
+        const path = event.state?.path || window.location.pathname;
+        console.log('  Navigating to:', path);
+
+        this.navigateTo(path, false);
     }
 
     handleLinkClick(event) {
@@ -579,10 +587,16 @@ class FiraRouter {
         if (window.location.protocol === 'file:' || initialPath.includes('.html')) {
             initialPath = '/';
         }
-        
+
         // Preserve the current URL after page refresh
         console.log(`🔄 Initializing router with path: ${initialPath}`);
-        
+
+        // Initialize history state if it doesn't exist
+        if (!window.history.state || !window.history.state.path) {
+            console.log('🔧 Initializing history state');
+            window.history.replaceState({ path: initialPath }, '', initialPath);
+        }
+
         this.navigateTo(initialPath, false);
     }
 }
@@ -845,7 +859,18 @@ const RouteHandlers = {
                     }
                     return; // CRITICAL: Exit early to prevent any board reinitialization
                 } else {
-                    // Step 4: Initialize project board for the specific project
+                    // Step 4: Add project board URL to history before initializing with task
+                    const projectUrl = `/project/${encodeURIComponent(projectname)}`;
+                    const taskUrl = `/project/${encodeURIComponent(projectname)}/task/${encodeURIComponent(taskParam)}`;
+
+                    // Replace current history entry with project board URL
+                    console.log('🔗 Adding project board to history before opening task');
+                    window.history.replaceState({ path: projectUrl }, '', projectUrl);
+                    // Then add task URL as new entry
+                    window.history.pushState({ path: taskUrl }, '', taskUrl);
+                    firaRouter.currentRoute = taskUrl;
+
+                    // Step 5: Initialize project board for the specific project
                     console.log('🔗 Step 2: Initializing project board for:', projectname);
 
                     if (typeof initProjectBoard === 'function') {

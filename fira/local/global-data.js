@@ -429,23 +429,98 @@ class GlobalDataManager {
         }
     }
 
-    async selectNewDirectory() {
-        console.log('📁 Selecting new directory...');
-        
+    // Open directory picker directly without intermediate dialog
+    async openDirectoryPickerDirectly() {
+        console.log('📁 Opening directory picker directly...');
+
+        // Check if File System Access API is supported
+        if (!('showDirectoryPicker' in window)) {
+            console.log('❌ File System Access API not supported in this browser');
+            alert('Your browser does not support direct folder access. Please use Chrome or Edge (version 86+).');
+            return false;
+        }
+
         // Clear existing data
         this.directoryHandle = null;
         window.firaDirectoryHandle = null;
         sessionStorage.removeItem('fira-session-data');
         sessionStorage.removeItem('fira-directory-selected');
-        
+
+        try {
+            // Open directory picker directly
+            const directoryHandle = await window.showDirectoryPicker({
+                mode: 'read',
+                startIn: 'documents'
+            });
+
+            console.log(`📁 Selected directory: ${directoryHandle.name}`);
+
+            // Store directory handle for later use both in instance and globally
+            this.directoryHandle = directoryHandle;
+            window.firaDirectoryHandle = directoryHandle; // Share between pages
+
+            // Store the fact that we have selected a directory (for navigation between pages)
+            sessionStorage.setItem('fira-directory-selected', 'true');
+            sessionStorage.setItem('fira-directory-name', directoryHandle.name);
+
+            // Scan the selected directory for projects
+            const projects = await this.scanDirectoryForProjects(directoryHandle);
+
+            if (projects.length > 0) {
+                this.projects = projects;
+                this.loadingMode = 'directory-picker';
+
+                // Load all tasks for all projects
+                console.log('🔍 Loading tasks for all projects...');
+                await this.loadTasksForProjects(directoryHandle);
+
+                console.log(`✅ Directory selection: loaded ${this.projects.length} projects and ${this.allTasks.length} tasks`);
+
+                // Save to session for file:// protocol
+                this.saveToSession();
+
+                // Make sure global handle is set
+                window.firaDirectoryHandle = this.directoryHandle;
+                console.log('🔗 Global directory handle updated after successful selection');
+
+                // Notify that data has changed and refresh the UI
+                this.notifyDataLoaded();
+
+                return true;
+            } else {
+                console.log('⚠️ Selected directory contains no projects');
+                alert('The selected directory does not contain any projects. Please choose a folder with project subdirectories.');
+                return false;
+            }
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                console.log('🚫 User cancelled directory selection');
+                return false;
+            }
+
+            console.error('❌ Error selecting directory:', error);
+            alert('Error accessing the selected directory. Please try again.');
+            return false;
+        }
+    }
+
+    async selectNewDirectory() {
+        console.log('📁 Selecting new directory...');
+
+        // Clear existing data
+        this.directoryHandle = null;
+        window.firaDirectoryHandle = null;
+        sessionStorage.removeItem('fira-session-data');
+        sessionStorage.removeItem('fira-directory-selected');
+
         // Prompt for new directory selection
         const success = await this.promptForDirectorySelection();
-        
+
         if (success) {
             // Notify listeners that data has changed
             this.notifyDataLoaded();
         }
-        
+
         return success;
     }
 
@@ -915,23 +990,23 @@ class GlobalDataManager {
                         To view your projects, you need to select your working directory.<br>
                         Click the button below to choose your projects folder.
                     </p>
-                    <button 
-                        onclick="window.globalDataManager.selectNewDirectory()" 
+                    <button
+                        onclick="window.globalDataManager.openDirectoryPickerDirectly()"
                         style="
                             background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-                            color: white; 
-                            border: none; 
-                            border-radius: 8px; 
-                            padding: 12px 24px; 
-                            font-size: 14px; 
-                            font-weight: 500; 
+                            color: white;
+                            border: none;
+                            border-radius: 8px;
+                            padding: 12px 24px;
+                            font-size: 14px;
+                            font-weight: 500;
                             cursor: pointer;
                             transition: all 0.2s ease;
                         "
                         onmouseover="this.style.transform='translateY(-2px)'"
                         onmouseout="this.style.transform='translateY(0)'"
                     >
-                        🔄 Select Directory
+                        Select Directory
                     </button>
                 </div>
             `;
@@ -982,16 +1057,16 @@ class GlobalDataManager {
                     >
                         🔄 Retry Connection
                     </button>
-                    <button 
-                        onclick="window.globalDataManager.selectNewDirectory()" 
+                    <button
+                        onclick="window.globalDataManager.openDirectoryPickerDirectly()"
                         style="
                             background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-                            color: white; 
-                            border: none; 
-                            border-radius: 8px; 
-                            padding: 12px 24px; 
-                            font-size: 14px; 
-                            font-weight: 500; 
+                            color: white;
+                            border: none;
+                            border-radius: 8px;
+                            padding: 12px 24px;
+                            font-size: 14px;
+                            font-weight: 500;
                             cursor: pointer;
                             transition: all 0.2s ease;
                         "
@@ -2331,6 +2406,74 @@ class GlobalDataManager {
                 cacheTimestamp: this.cacheTimestamp
             }
         }));
+    }
+
+    // Create project method for File System Access API
+    async createProject(projectData) {
+        if (!this.directoryHandle) {
+            throw new Error('No working directory selected. Please choose a projects folder first.');
+        }
+
+        try {
+            // Determine the projects directory
+            let projectsDir = this.directoryHandle;
+            try {
+                // Check if there's a 'projects' subdirectory
+                projectsDir = await this.directoryHandle.getDirectoryHandle('projects');
+            } catch (e) {
+                // Use root directory if no 'projects' folder exists
+                projectsDir = this.directoryHandle;
+            }
+
+            // Create the project directory
+            const projectDirHandle = await projectsDir.getDirectoryHandle(projectData.id, { create: true });
+
+            // Create the project structure
+            const folders = ['backlog', 'progress', 'review', 'testing', 'done'];
+            for (const folder of folders) {
+                await projectDirHandle.getDirectoryHandle(folder, { create: true });
+            }
+
+            // Create README.md with project description
+            const readmeHandle = await projectDirHandle.getFileHandle('README.md', { create: true });
+            const readmeStream = await readmeHandle.createWritable();
+            const readmeContent = `# ${projectData.name}
+
+${projectData.description || 'No description provided'}
+
+Created: ${new Date().toLocaleDateString()}
+`;
+            await readmeStream.write(readmeContent);
+            await readmeStream.close();
+
+            console.log(`✅ Project "${projectData.name}" created successfully`);
+            return true;
+
+        } catch (error) {
+            console.error('Error creating project:', error);
+            throw new Error(`Failed to create project: ${error.message}`);
+        }
+    }
+
+    // Refresh data method to reload projects after changes
+    async refreshData() {
+        if (this.directoryHandle) {
+            console.log('🔄 Refreshing project data from directory...');
+            try {
+                const projects = await this.scanDirectoryForProjects(this.directoryHandle);
+                if (projects.length > 0) {
+                    this.projects = projects;
+                    await this.loadTasksForProjects(this.directoryHandle);
+                    this.loadingMode = 'directory-refreshed';
+                    console.log(`✅ Refreshed ${projects.length} projects`);
+                }
+            } catch (error) {
+                console.error('Error refreshing data:', error);
+                throw error;
+            }
+        } else {
+            console.warn('No directory handle available for refresh');
+        }
     }
 }
 

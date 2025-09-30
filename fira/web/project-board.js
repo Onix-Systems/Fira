@@ -1673,7 +1673,24 @@ class ProjectBoard {
                 const expectedTaskParam = currentParams.taskname || currentParams.taskId;
 
                 if (currentParams.projectname && (!expectedTaskParam || decodeURIComponent(expectedTaskParam) !== task.id)) {
-                    window.firaRouter.navigateTo(`/project/${encodeURIComponent(currentParams.projectname)}/task/${encodeURIComponent(task.id)}`, true);
+                    const projectUrl = `/project/${encodeURIComponent(currentParams.projectname)}`;
+                    const taskUrl = `/project/${encodeURIComponent(currentParams.projectname)}/task/${encodeURIComponent(task.id)}`;
+
+                    // Check if current URL is already a task URL (has /task/ in it)
+                    const currentPath = window.location.pathname;
+                    const isCurrentlyOnTask = currentPath.includes('/task/');
+
+                    if (!isCurrentlyOnTask) {
+                        // We're on project board, need to add project URL to history first
+                        console.log('🔗 Adding project board to history before task');
+                        window.history.replaceState({ path: projectUrl }, '', projectUrl);
+                        // Then push task URL as new entry
+                        window.history.pushState({ path: taskUrl }, '', taskUrl);
+                        window.firaRouter.currentRoute = taskUrl;
+                    } else {
+                        // Already on a task, just navigate normally
+                        window.firaRouter.navigateTo(taskUrl, true);
+                    }
                     console.log('🔗 Updated URL for task ID:', task.id);
                 } else {
                     console.log('🔗 URL already shows correct task, not updating from openTaskByName');
@@ -5636,8 +5653,8 @@ async function closeTaskModal() {
             const currentParams = window.firaRouter.getCurrentParams();
             if (currentParams.projectname && (currentParams.taskname || currentParams.taskId)) {
                 const projectUrl = `/project/${encodeURIComponent(currentParams.projectname)}`;
-                // Use history.replaceState to avoid router triggering
-                window.history.replaceState({}, '', projectUrl);
+                // Use history.replaceState with path in state to support browser back/forward
+                window.history.replaceState({ path: projectUrl }, '', projectUrl);
                 window.firaRouter.currentRoute = projectUrl;
                 console.log('🔗 Updated URL silently after closing task:', projectUrl);
             }

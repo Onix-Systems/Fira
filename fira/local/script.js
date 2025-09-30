@@ -41,12 +41,39 @@ async function loadProjects() {
         
         // Update status indicator
         updateServerStatus();
-        
+
+        // Update button states
+        updateNewProjectButtonState();
+
     } catch (error) {
         hideLoading();
         console.error('Failed to load projects:', error);
         showMessage(error.message || 'Failed to load projects', 'error');
         renderProjects();
+    }
+}
+
+// Update New Project button state based on directory selection
+function updateNewProjectButtonState() {
+    const newProjectBtn = document.getElementById('newProjectBtn');
+
+    if (!newProjectBtn) {
+        console.warn('newProjectBtn not found when updating button state');
+        return;
+    }
+
+    // Check if working directory is selected
+    const hasDirectory = window.globalDataManager &&
+        (window.globalDataManager.directoryHandle || window.firaDirectoryHandle);
+
+    if (hasDirectory) {
+        // Directory is selected - enable button
+        newProjectBtn.disabled = false;
+        console.log('✅ New Project button enabled - directory selected');
+    } else {
+        // No directory selected - disable button
+        newProjectBtn.disabled = true;
+        console.log('❌ New Project button disabled - no directory selected');
     }
 }
 
@@ -239,6 +266,8 @@ function setupEventListeners() {
     
     if (newProjectBtn) {
         newProjectBtn.addEventListener('click', openNewProjectModal);
+        // Initialize button state
+        updateNewProjectButtonState();
     } else {
         console.warn('newProjectBtn element not found');
     }
@@ -681,15 +710,21 @@ function clearFieldError(fieldId) {
 
 async function handleCreateProject(e) {
     e.preventDefault();
-    
+
     const createBtn = document.getElementById('createProjectBtn');
     const btnText = createBtn.querySelector('.btn-text');
     const btnLoading = createBtn.querySelector('.btn-loading');
-    
+
+    // Check if working directory is selected
+    if (window.globalDataManager && !window.globalDataManager.directoryHandle && !window.firaDirectoryHandle) {
+        showNotification('Please select a working directory first. Click "Choose Folder" to select your projects folder.', 'error');
+        return;
+    }
+
     // Validate form
     const isNameValid = validateProjectName();
     const isIdValid = validateProjectId();
-    
+
     if (!isNameValid || !isIdValid) {
         return;
     }
@@ -708,43 +743,43 @@ async function handleCreateProject(e) {
         createBtn.disabled = true;
         btnText.style.display = 'none';
         btnLoading.style.display = 'flex';
-        
-        // Send POST request to server
-        const response = await fetch(`http://localhost:8080/api/projects`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(projectData)
-        });
-        
-        const result = await response.json();
 
-        if (!response.ok || !result.success) {
-            throw new Error(result.error || 'Failed to create project on server');
+        // Use globalDataManager to create project through File System API
+        if (window.globalDataManager && window.globalDataManager.directoryHandle) {
+            // Create project using file system
+            await window.globalDataManager.createProject(projectData);
+
+            // Refresh projects list
+            await window.globalDataManager.refreshData();
+
+            // Update local data
+            projectsData = window.globalDataManager.getProjects();
+            filteredProjects = [...projectsData];
+        } else {
+            // Fallback to local data only (for demo mode)
+            projectsData.unshift({
+                id: projectData.id,
+                name: projectData.name,
+                description: projectData.description,
+                stats: {
+                    backlog: { count: 0, detail: '(0 tasks)' },
+                    inProgress: { count: 0, detail: '(0 devs)' },
+                    done: { count: 0, detail: '(0 tasks)' }
+                }
+            });
+            filteredProjects = [...projectsData];
         }
 
-        // Add project to local data
-        projectsData.unshift({
-            id: projectData.id,
-            name: projectData.name,
-            description: projectData.description,
-            stats: {
-                backlog: { count: 0, detail: '(0 tasks)' },
-                inProgress: { count: 0, detail: '(0 devs)' },
-                done: { count: 0, detail: '(0 tasks)' }
-            }
-        });
-        filteredProjects = [...projectsData];
-        
         // Re-render projects
         renderProjects();
-        
+
         // Close modal and reset form
         closeModal();
         resetCreateProjectForm();
-        
+
         // Show success message
         showMessage(`Project "${projectData.name}" created successfully!`, 'success');
-        
+
     } catch (error) {
         console.error('Error creating project:', error);
         showMessage(`Failed to create project. ${error.message}`, 'error');

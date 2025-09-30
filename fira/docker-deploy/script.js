@@ -603,14 +603,23 @@ function setupCreateProjectForm() {
     const projectDescriptionTextarea = document.getElementById('projectDescription');
     const descriptionCharCount = document.getElementById('descriptionCharCount');
     
-    // Auto-generate project ID from name (only if Project ID is empty)
+    // Auto-generate project ID from name
     projectNameInput.addEventListener('input', (e) => {
         const name = e.target.value;
-        if (!projectIdInput.value.trim()) {
+
+        // Validate that only English letters are used
+        const hasNonEnglish = /[^a-zA-Z0-9\s\-_]/.test(name);
+        const projectNameError = document.getElementById('projectNameError');
+
+        if (hasNonEnglish) {
+            showFieldError('projectName', 'Project name can only contain English letters, numbers, spaces, hyphens and underscores');
+        } else {
+            clearFieldError('projectName');
+
+            // Auto-generate project ID from the current name
             const projectId = generateProjectId(name);
             projectIdInput.value = projectId;
         }
-        validateProjectName();
     });
 
     // Validate Project ID input
@@ -659,31 +668,34 @@ function setupCreateProjectForm() {
 
 function generateProjectId(name) {
     if (!name) return '';
-    
-    // Generate a short uppercase ID from the project name
-    const words = name.trim().split(/\s+/);
+
+    // Remove all non-English characters and keep only letters and spaces
+    const cleanName = name.replace(/[^a-zA-Z\s]/g, '').trim();
+
+    if (!cleanName) return '';
+
+    // Split by spaces to get words
+    const words = cleanName.split(/\s+/).filter(word => word.length > 0);
     let id = '';
-    
-    if (words.length === 1) {
-        // Single word - take first 3-5 characters
-        id = words[0].substring(0, 5).toUpperCase();
-    } else {
-        // Multiple words - take first letter of each word
-        id = words.map(word => word.charAt(0)).join('').toUpperCase();
-        
-        // If too short, add more characters from first word
-        if (id.length < 3 && words[0].length > 1) {
-            id = words[0].substring(0, 3).toUpperCase();
-        }
+
+    if (words.length === 0) {
+        return '';
     }
-    
-    // Remove non-alphanumeric characters and ensure it starts with a letter
-    id = id.replace(/[^A-Z0-9]/g, '');
-    if (id && !/^[A-Z]/.test(id)) {
-        id = 'PROJ' + id;
+
+    // Always take first 3 letters from the first word
+    const firstWord = words[0];
+    id = firstWord.substring(0, Math.min(3, firstWord.length)).toUpperCase();
+
+    // If the first word has less than 3 letters, try to add from the second word
+    if (id.length < 3 && words.length > 1) {
+        const remaining = 3 - id.length;
+        id += words[1].substring(0, remaining).toUpperCase();
     }
-    
-    return id.substring(0, 10); // Max 10 characters
+
+    // If still less than 3 characters, pad with the original letters repeated or just return what we have
+    // This ensures we always try to get 3 letters if possible
+
+    return id;
 }
 
 function validateProjectId() {
@@ -726,45 +738,52 @@ function validateProjectName() {
     const projectNameInput = document.getElementById('projectName');
     const projectNameError = document.getElementById('projectNameError');
     const name = projectNameInput.value.trim();
-    
+
     // Clear previous validation state
     projectNameInput.classList.remove('error', 'success');
     projectNameError.classList.remove('show');
-    
+
     if (!name) {
         showFieldError('projectName', 'Project name is required');
         return false;
     }
-    
+
+    // Check for non-English characters
+    const hasNonEnglish = /[^a-zA-Z0-9\s\-_]/.test(name);
+    if (hasNonEnglish) {
+        showFieldError('projectName', 'Project name can only contain English letters, numbers, spaces, hyphens and underscores');
+        return false;
+    }
+
     if (name.length < 3) {
         showFieldError('projectName', 'Project name must be at least 3 characters long');
         return false;
     }
-    
+
     if (name.length > 100) {
         showFieldError('projectName', 'Project name must be less than 100 characters');
         return false;
     }
-    
+
     // Check for duplicate names
-    const isDuplicate = projectsData.some(project => 
+    const isDuplicate = projectsData.some(project =>
         project.name.toLowerCase() === name.toLowerCase()
     );
-    
+
     if (isDuplicate) {
         showFieldError('projectName', 'A project with this name already exists');
         return false;
     }
-    
+
     // Check for duplicate IDs
     const projectId = document.getElementById('projectId').value;
     const isDuplicateId = projectsData.some(project => project.id === projectId);
-    
+
     if (isDuplicateId) {
         showFieldError('projectName', 'Generated project ID already exists. Please choose a different name.');
         return false;
     }
-    
+
     // Validation passed
     projectNameInput.classList.add('success');
     return true;

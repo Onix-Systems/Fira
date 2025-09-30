@@ -79,19 +79,8 @@
             z-index: 9999;
         `;
         statusEl.textContent = message;
-
-        // Wait for body to be available
-        if (document.body) {
-            document.body.insertBefore(statusEl, document.body.firstChild);
-        } else {
-            // If body is not ready, wait for DOM to load
-            document.addEventListener('DOMContentLoaded', () => {
-                if (document.body) {
-                    document.body.insertBefore(statusEl, document.body.firstChild);
-                }
-            });
-        }
-
+        document.body.insertBefore(statusEl, document.body.firstChild);
+        
         return statusEl;
     }
     
@@ -102,29 +91,19 @@
         }
     }
     
-    // Run authentication check when DOM is ready
-    function runAuthCheck() {
-        const statusEl = showAuthMessage('🔐 Checking authentication...');
-
-        setTimeout(() => {
-            const isAuthenticated = checkLoginStatus();
-
-            if (isAuthenticated) {
+    // Run authentication check immediately
+    const statusEl = showAuthMessage('🔐 Checking authentication...');
+    
+    setTimeout(() => {
+        const isAuthenticated = checkLoginStatus();
+        
+        if (isAuthenticated) {
             statusEl.textContent = '✅ Authentication verified';
             setTimeout(hideAuthMessage, 1000);
-            }
-            // If not authenticated, page will redirect automatically
-        }, 100);
-    }
-
-    // Run auth check when DOM is ready
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', runAuthCheck);
-    } else {
-        // DOM is already ready
-        runAuthCheck();
-    }
-
+        }
+        // If not authenticated, page will redirect automatically
+    }, 100);
+    
     // Export for other scripts if needed
     window.FiraAuth = {
         isAuthenticated: checkLoginStatus,

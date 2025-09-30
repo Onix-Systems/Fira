@@ -1,4 +1,5 @@
-// Project Board JavaScript
+// Project Board JavaScript - v2.3 - Cache Buster Fix
+console.log('📋 Loading Project Board JS v2.3');
 class ProjectBoard {
     constructor() {
         console.log(`🆕 Creating new ProjectBoard instance`);
@@ -6,15 +7,18 @@ class ProjectBoard {
         this.tasks = [];
         this.filteredTasks = [];
         this.draggedTask = null;
-        this.dropZonesSetup = false;
         this.searchTerm = '';
         this.selectedDeveloper = '';
         this.dateRange = '';
         this.currentView = 'kanban'; // 'kanban' or 'list'
         this.sortColumn = '';
+        this.dropZonesSetup = false;
         this.sortDirection = 'asc'; // 'asc' or 'desc'
         this.displayedTasks = 20; // Initial number of tasks to show
         this.loadIncrement = 20;  // How many more tasks to load on scroll
+
+        // Column sorting state
+        this.columnSortStates = {}; // Track sort state for each column
 
         // Path where tasks were loaded from (if known) - used to save back to same file
         this.tasksFilePath = null;
@@ -22,8 +26,20 @@ class ProjectBoard {
         this.currentTask = null;
         // Flag to prevent double loading of tasks
         this.tasksLoaded = false;
+        // Track which project was loaded last
+        this.lastLoadedProject = null;
         // Expose instance globally so wrapper functions / globals can call instance methods
         window.projectBoard = this;
+        
+        // Role checking utility - check if this is web version (server-based vs file-based)
+        const hostname = window.location.hostname;
+        const protocol = window.location.protocol;
+        
+        this.isWebVersion = hostname.includes("onix-systems-android-tasks") || 
+                           (protocol !== 'file:' && hostname !== '');
+                           
+        console.log('🌐 Hostname:', hostname, 'Protocol:', protocol);
+        console.log('🔧 isWebVersion:', this.isWebVersion);
         
         // Chart instances for cleanup
         this.statusChartInstance = null;
@@ -35,6 +51,211 @@ class ProjectBoard {
             console.error('Failed to initialize ProjectBoard:', error);
         });
     }
+    
+    // Helper function to get current user role
+    getUserRole() {
+        if (!this.isWebVersion) return 'editor'; // Local version has full access
+        
+        const loginData = localStorage.getItem('fira_login');
+        if (loginData) {
+            try {
+                const data = JSON.parse(loginData);
+                return data.role || 'viewer';
+            } catch (e) {
+                console.warn('Failed to parse login data for role check');
+                return 'viewer';
+            }
+        }
+        return 'viewer';
+    }
+    
+    // Check if current user is a viewer (read-only)
+    isViewer() {
+        return this.getUserRole() === 'viewer';
+    }
+    
+    // Check if current user can edit (editor or admin)
+    canEdit() {
+        const role = this.getUserRole();
+        return role === 'editor' || role === 'admin';
+    }
+    
+    // Get git configuration (user name and email)
+    async getGitConfig() {
+        try {
+            const response = await fetch('/api/git-config');
+            const data = await response.json();
+            if (data.success && data.name) {
+                return {
+                    name: data.name,
+                    email: data.email
+                };
+            }
+        } catch (error) {
+            console.warn('Failed to get git config:', error);
+        }
+        return {
+            name: 'User',
+            email: null
+        };
+    }
+    
+    // Setup UI permissions based on user role
+    setupUIPermissions() {
+        console.log('🛠️ setupUIPermissions called');
+        console.log('📍 Current hostname:', window.location.hostname);
+        console.log('🌍 isWebVersion:', this.isWebVersion);
+        
+        const isViewer = this.isViewer();
+        const canEdit = this.canEdit();
+        
+        console.log('👤 User role:', this.getUserRole());
+        console.log('👁️ isViewer:', isViewer);
+        console.log('✏️ canEdit:', canEdit);
+        
+        // For non-web versions (local), always allow full access
+        if (!this.isWebVersion) {
+            // Set up full editor mode for local versions
+            document.body.classList.remove('viewer-mode');
+            document.body.classList.add('editor-mode');
+            
+            console.log('🎯 Setting up drag and drop for local version...');
+            // Setup drag and drop for local versions
+            setTimeout(() => {
+                // Reset drop zones flag to ensure they get re-setup after DOM changes
+                this.dropZonesSetup = false;
+                this.setupDropZones();
+                console.log('✅ setupDropZones completed for local version');
+            }, 50);
+            
+            console.log('🔧 Local version: full editor access enabled');
+            return;
+        }
+        
+        // Hide/show create task button
+        const createTaskBtn = document.getElementById('createTaskBtn');
+        if (createTaskBtn) {
+            createTaskBtn.style.display = canEdit ? 'flex' : 'none';
+        }
+        
+        // Enable/disable task editing in modal
+        const taskCards = document.querySelectorAll('.task-card');
+        taskCards.forEach(card => {
+            if (canEdit) {
+                card.classList.remove('viewer-readonly');
+            } else {
+                card.classList.add('viewer-readonly');
+            }
+        });
+        
+        // Set body class for CSS styling
+        if (isViewer) {
+            document.body.classList.add('viewer-mode');
+            // Removed showViewerModeNotification() - notification not needed
+        } else {
+            document.body.classList.remove('viewer-mode');
+            document.body.classList.add('editor-mode');
+        }
+        
+        // Update placeholder text based on role
+        const searchInput = document.getElementById('taskSearchInput');
+        if (searchInput) {
+            searchInput.placeholder = canEdit ? 'Search tasks...' : 'Search tasks (read-only)...';
+        }
+        
+        // Setup or remove drop zones based on permissions
+        if (canEdit) {
+            setTimeout(() => {
+                // Reset drop zones flag to ensure they get re-setup after DOM changes
+                this.dropZonesSetup = false;
+                this.setupDropZones();
+            }, 50);
+        } else {
+            this.removeDropZones();
+        }
+        
+        console.log(`🔧 UI permissions set: role=${this.getUserRole()}, canEdit=${canEdit}, isViewer=${isViewer}`);
+    }
+
+    // Show notification for viewer mode
+    showViewerModeNotification() {
+        if (!this.isViewer() || !this.isWebVersion) return;
+        
+        // Check if notification already exists
+        if (document.getElementById('viewer-mode-notification')) return;
+        
+        const notification = document.createElement('div');
+        notification.id = 'viewer-mode-notification';
+        notification.className = 'viewer-notification';
+        notification.innerHTML = `
+            <div class="notification-content">
+                <span class="notification-icon">👁️</span>
+                <span class="notification-text">Read-only mode - Drag & Drop disabled</span>
+                <button class="notification-close" onclick="this.parentElement.parentElement.remove()">×</button>
+            </div>
+        `;
+        
+        // Style the notification
+        notification.style.cssText = `
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 6px;
+            padding: 12px 16px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+            font-size: 14px;
+            color: #856404;
+            max-width: 300px;
+        `;
+        
+        // Style the notification content
+        const style = document.createElement('style');
+        style.textContent = `
+            .viewer-notification .notification-content {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .viewer-notification .notification-icon {
+                font-size: 16px;
+            }
+            .viewer-notification .notification-text {
+                flex: 1;
+                font-weight: 500;
+            }
+            .viewer-notification .notification-close {
+                background: none;
+                border: none;
+                font-size: 18px;
+                cursor: pointer;
+                color: #856404;
+                padding: 0;
+                margin-left: 8px;
+            }
+            .viewer-notification .notification-close:hover {
+                color: #533f03;
+            }
+        `;
+        
+        if (!document.getElementById('viewer-notification-styles')) {
+            style.id = 'viewer-notification-styles';
+            document.head.appendChild(style);
+        }
+        
+        document.body.appendChild(notification);
+        
+        // Auto-hide after 5 seconds
+        setTimeout(() => {
+            if (notification.parentElement) {
+                notification.remove();
+            }
+        }, 5000);
+        
+        console.log('👁️ Viewer mode notification shown');
+    }
 
     async init() {
         // Wait for DOM to be ready
@@ -43,13 +264,20 @@ class ProjectBoard {
                 document.addEventListener('DOMContentLoaded', resolve);
             });
         }
-        
+
         this.loadProjectFromUrl();
         this.setupEventListeners();
         await this.loadProjectTasks();
         this.filterAndRenderTasks();
         this.initializeViewSwitchButton();
-        
+
+        // Setup UI permissions after everything is loaded
+        // Note: setupUIPermissions() now handles setupDropZones() internally
+        this.setupUIPermissions();
+
+        // Check for task parameter in URL and open it if found
+        this.checkAndOpenTaskFromUrl();
+
         // Add window resize listener to re-equalize column heights
         window.addEventListener('resize', () => {
             // Debounce the resize event
@@ -60,6 +288,36 @@ class ProjectBoard {
                 }
             }, 250);
         });
+    }
+
+    checkAndOpenTaskFromUrl() {
+        console.log('🔍 Checking for task parameter in URL...');
+
+        let taskParam = null;
+
+        // Try to get task from router first
+        if (window.firaRouter && window.firaRouter.getCurrentParams) {
+            const params = window.firaRouter.getCurrentParams();
+            taskParam = params.taskId || params.taskname;
+            console.log('📡 Router task param:', taskParam);
+        }
+
+        // Fallback to URL parameters if no router param found
+        if (!taskParam) {
+            const urlParams = new URLSearchParams(window.location.search);
+            taskParam = urlParams.get('task');
+            console.log('📄 URL task param:', taskParam);
+        }
+
+        if (taskParam) {
+            console.log('🎯 Found task parameter, opening task:', taskParam);
+            // Wait a bit for tasks to be rendered before opening the modal
+            setTimeout(() => {
+                this.openTaskByName(decodeURIComponent(taskParam));
+            }, 300);
+        } else {
+            console.log('📄 No task parameter found in URL');
+        }
     }
 
     loadProjectFromUrl() {
@@ -77,11 +335,17 @@ class ProjectBoard {
             console.log(`📂 Project ID from router: "${projectId}"`);
             
             if (projectId && window.PROJECTS_DATA) {
-                this.currentProject = window.PROJECTS_DATA.find(p => p.id === projectId) || { id: projectId, name: projectId };
-                console.log(`✅ Found project in PROJECTS_DATA:`, this.currentProject);
+                const foundProject = window.PROJECTS_DATA.find(p => p.id === projectId);
+                if (foundProject) {
+                    this.currentProject = foundProject;
+                    console.log(`✅ Found project in PROJECTS_DATA:`, this.currentProject);
+                } else {
+                    this.currentProject = { id: projectId, name: decodeURIComponent(projectId), description: '' };
+                    console.log(`⚠️ Project not in PROJECTS_DATA, using decoded with empty description:`, this.currentProject);
+                }
             } else if (projectId) {
-                this.currentProject = { id: projectId, name: decodeURIComponent(projectId) };
-                console.log(`⚠️ Project not in PROJECTS_DATA, using decoded:`, this.currentProject);
+                this.currentProject = { id: projectId, name: decodeURIComponent(projectId), description: '' };
+                console.log(`⚠️ No PROJECTS_DATA available, using decoded with empty description:`, this.currentProject);
             }
         }
         
@@ -92,13 +356,19 @@ class ProjectBoard {
             console.log(`📄 URL params project: "${projectId}"`);
             
             if (projectId && window.PROJECTS_DATA) {
-                this.currentProject = window.PROJECTS_DATA.find(p => p.id === projectId) || { id: projectId, name: projectId };
-                console.log(`✅ Found project in PROJECTS_DATA:`, this.currentProject);
+                const foundProject = window.PROJECTS_DATA.find(p => p.id === projectId);
+                if (foundProject) {
+                    this.currentProject = foundProject;
+                    console.log(`✅ Found project in PROJECTS_DATA:`, this.currentProject);
+                } else {
+                    this.currentProject = { id: projectId, name: decodeURIComponent(projectId), description: '' };
+                    console.log(`⚠️ Project not in PROJECTS_DATA, using decoded with empty description:`, this.currentProject);
+                }
             } else if (projectId) {
-                this.currentProject = { id: projectId, name: decodeURIComponent(projectId) };
-                console.log(`⚠️ Project not in PROJECTS_DATA, using decoded:`, this.currentProject);
+                this.currentProject = { id: projectId, name: decodeURIComponent(projectId), description: '' };
+                console.log(`⚠️ No PROJECTS_DATA available, using decoded with empty description:`, this.currentProject);
             } else {
-                this.currentProject = { id: 'sample-project', name: 'Sample Project' };
+                this.currentProject = { id: 'sample-project', name: 'Sample Project', description: '' };
                 console.log(`❌ No project found, using sample project`);
             }
         }
@@ -113,17 +383,111 @@ class ProjectBoard {
             } else {
                 console.error('❌ Project name element not found!');
             }
+            
+            // Try to load fresh project description after initial loading
+            setTimeout(() => {
+                this.loadFreshProjectData();
+            }, 500); // Small delay to ensure global data manager is ready
+        }
+    }
+    
+    // Method to load fresh project data from server when page loads
+    async loadFreshProjectData() {
+        console.log('🔍 loadFreshProjectData called for project:', this.currentProject?.id);
+        
+        if (!this.currentProject) {
+            console.log('❌ No current project, exiting loadFreshProjectData');
+            return;
+        }
+        
+        console.log('🔍 Current project description:', this.currentProject.description);
+        console.log('🔍 Description equals ID?', this.currentProject.description === this.currentProject.id);
+        console.log('🔍 Description is empty?', !this.currentProject.description || this.currentProject.description.trim() === '');
+        
+        // Only try to load if description is missing or looks like project ID
+        if (this.currentProject.description && 
+            this.currentProject.description !== this.currentProject.id && 
+            this.currentProject.description.trim() !== '') {
+            console.log('✅ Project already has valid description, skipping fresh data load');
+            return;
+        }
+        
+        // Try to load from server first
+        console.log('🔍 Checking server availability:');
+        console.log('  - globalDataManager:', !!window.globalDataManager);
+        console.log('  - apiClient:', !!window.globalDataManager?.apiClient);
+        console.log('  - loadingMode:', window.globalDataManager?.loadingMode);
+        
+        if (window.globalDataManager && 
+            window.globalDataManager.apiClient && 
+            window.globalDataManager.loadingMode === 'server') {
+            try {
+                console.log('🔄 Loading fresh project data on page load...');
+                const serverProjects = await window.globalDataManager.apiClient.getProjects();
+                console.log('🔍 Server projects loaded:', serverProjects.length);
+                const serverProject = serverProjects.find(p => p.id === this.currentProject.id);
+                console.log('🔍 Found server project:', !!serverProject);
+                console.log('🔍 Server project description:', serverProject?.description);
+                
+                if (serverProject && serverProject.description && 
+                    serverProject.description !== serverProject.id && 
+                    serverProject.description.trim() !== '') {
+                    
+                    console.log('✅ Found fresh project data from server:', serverProject);
+                    // Update current project with fresh data
+                    this.currentProject = { ...this.currentProject, ...serverProject };
+                    
+                    // Also update in globalDataManager if it exists
+                    if (window.globalDataManager && window.globalDataManager.projects) {
+                        const projectIndex = window.globalDataManager.projects.findIndex(p => p.id === this.currentProject.id);
+                        if (projectIndex !== -1) {
+                            window.globalDataManager.projects[projectIndex] = { ...this.currentProject };
+                            console.log('✅ Updated project in globalDataManager');
+                        }
+                    }
+                    
+                    console.log('✅ Project description restored from server on page load');
+                    return; // Successfully loaded from server
+                } else {
+                    console.log('⚠️ Server project has no valid description');
+                }
+            } catch (error) {
+                console.warn('⚠️ Failed to load fresh project data on page load:', error);
+            }
+        } else {
+            console.log('⚠️ Server not available for loading fresh data');
+        }
+        
+        // Try to load from global data manager as fallback
+        if ((!this.currentProject.description || 
+             this.currentProject.description === this.currentProject.id || 
+             this.currentProject.description.trim() === '') &&
+            window.globalDataManager && window.globalDataManager.getProjects) {
+            
+            const projects = window.globalDataManager.getProjects();
+            const foundProject = projects.find(p => p.id === this.currentProject.id);
+            if (foundProject && foundProject.description && 
+                foundProject.description !== foundProject.id && 
+                foundProject.description.trim() !== '') {
+                
+                console.log('✅ Found project data in globalDataManager:', foundProject);
+                this.currentProject = { ...this.currentProject, ...foundProject };
+                console.log('✅ Project description restored from globalDataManager on page load');
+            }
         }
     }
 
     setupEventListeners() {
+        // Remove old listeners by cloning elements (this clears all event listeners)
+        this.cleanupEventListeners();
+        
         // Back button
         console.log('🔧 Setting up back button event listener...');
         const backButton = document.getElementById('backButton');
         console.log('🔍 Back button found:', !!backButton);
         if (backButton) {
             console.log('✅ Adding click listener to back button');
-            backButton.addEventListener('click', (e) => {
+            const backHandler = (e) => {
                 console.log('🔙 Back button clicked!');  // Debug log
                 e.preventDefault();
 
@@ -137,10 +501,20 @@ class ProjectBoard {
                     .then(() => console.log('Background tasks save completed'))
                     .catch(err => console.error('Background save failed:', err));
 
-                // Navigate back to dashboard
+                // Navigate back to dashboard (check if task is open first)
                 console.log('🔙 Navigating back to dashboard...');
+                
+                // If task modal is open, just close it instead of navigating to dashboard
+                const taskModal = document.getElementById('taskDetailModal');
+                if (taskModal && taskModal.style.display === 'flex') {
+                    console.log('🔙 Task modal is open, closing it instead of navigating');
+                    closeTaskModal();
+                    return;
+                }
+                
+                // Navigate to dashboard only if no task is open
                 if (window.firaRouter && typeof window.firaRouter.navigateTo === 'function') {
-                    console.log('✅ Using router navigation');
+                    console.log('✅ Using router navigation to dashboard');
                     window.firaRouter.navigateTo('/');
                 } else if (window.navigateToDashboard && typeof window.navigateToDashboard === 'function') {
                     console.log('✅ Using global navigation function');
@@ -149,28 +523,51 @@ class ProjectBoard {
                     console.log('⚠️ Using browser history back');
                     window.history.back();
                 }
-            });
+            };
+            backButton.addEventListener('click', backHandler);
+            // Store handler for potential cleanup
+            this.eventHandlers = this.eventHandlers || new Map();
+            this.eventHandlers.set('backButton', backHandler);
         }
 
-        // Analytics button - opens in same window
-        const analyticsBtn = document.getElementById('analyticsBtn');
-        if (analyticsBtn) {
-            analyticsBtn.addEventListener('click', () => {
-                this.navigateToAnalytics();
-            });
-        }
 
         const viewSwitchBtn = document.getElementById('viewSwitchBtn');
         if (viewSwitchBtn) {
-            viewSwitchBtn.addEventListener('click', () => {
+            const viewSwitchHandler = () => {
                 this.switchView();
-            });
+            };
+            viewSwitchBtn.addEventListener('click', viewSwitchHandler);
+            this.eventHandlers = this.eventHandlers || new Map();
+            this.eventHandlers.set('viewSwitchBtn', viewSwitchHandler);
+        }
+
+        // Calculate Date button
+        const calculateDateBtn = document.getElementById('calculateDateBtn');
+        if (calculateDateBtn) {
+            const calculateDateHandler = () => {
+                // Navigate to calculate date page with correct path
+                window.location.href = '/pages/calculateDate.html';
+            };
+            calculateDateBtn.addEventListener('click', calculateDateHandler);
+            this.eventHandlers = this.eventHandlers || new Map();
+            this.eventHandlers.set('calculateDateBtn', calculateDateHandler);
+        }
+
+        // Analytics button
+        const analyticsBtn = document.getElementById('analyticsBtn');
+        if (analyticsBtn) {
+            const analyticsHandler = () => {
+                this.toggleView('analytics');
+            };
+            analyticsBtn.addEventListener('click', analyticsHandler);
+            this.eventHandlers = this.eventHandlers || new Map();
+            this.eventHandlers.set('analyticsBtn', analyticsHandler);
         }
 
         // Create task button
         const createTaskBtn = document.getElementById('createTaskBtn');
         if (createTaskBtn) {
-            createTaskBtn.addEventListener('click', () => {
+            const createTaskHandler = () => {
                 console.log('🔄 createTaskBtn clicked, checking mode...');
                 console.log('🔄 globalDataManager:', window.globalDataManager);
                 console.log('🔄 loadingMode:', window.globalDataManager?.loadingMode);
@@ -211,7 +608,21 @@ class ProjectBoard {
                     // Open the same detail modal used for editing
                     this.openTaskDetail(newTask);
                 }
-            });
+            };
+            createTaskBtn.addEventListener('click', createTaskHandler);
+            this.eventHandlers = this.eventHandlers || new Map();
+            this.eventHandlers.set('createTaskBtn', createTaskHandler);
+        }
+
+        // Add Developer button
+        const addDeveloperBtn = document.getElementById('addDeveloperBtn');
+        if (addDeveloperBtn) {
+            const addDeveloperHandler = () => {
+                this.openAddDeveloperModal();
+            };
+            addDeveloperBtn.addEventListener('click', addDeveloperHandler);
+            this.eventHandlers = this.eventHandlers || new Map();
+            this.eventHandlers.set('addDeveloperBtn', addDeveloperHandler);
         }
 
         // Create task form submission
@@ -254,29 +665,154 @@ class ProjectBoard {
 
         // Setup list view event listeners
         this.setupListViewEventListeners();
+
+        // Setup column sorting event listeners
+        this.setupColumnSortEventListeners();
+    }
+
+    cleanupEventListeners() {
+        // Simple approach: since we don't need to preserve any other listeners,
+        // and the main problematic buttons are top-level, we can just clear their handlers
+        // More sophisticated approach would be to track and remove specific listeners
+        const buttonIds = ['backButton', 'calculateDateBtn', 'analyticsBtn', 'viewSwitchBtn', 'createTaskBtn'];
+        
+        buttonIds.forEach(buttonId => {
+            const button = document.getElementById(buttonId);
+            if (button && this.eventHandlers && this.eventHandlers.has(buttonId)) {
+                // Remove the specific handler if we have it stored
+                const handler = this.eventHandlers.get(buttonId);
+                button.removeEventListener('click', handler);
+                console.log(`🧹 Cleaned up event listener for ${buttonId}`);
+            }
+        });
     }
 
     generateTaskId() {
-        // Generate unique task ID for new tasks
-        const projectPrefix = this.currentProject ? this.currentProject.id.toUpperCase() : 'TSK';
-        const timestamp = Date.now().toString().slice(-6); // Last 6 digits of timestamp
-        const random = Math.random().toString(36).substr(2, 3).toUpperCase(); // 3 random chars
-        return `${projectPrefix}-${timestamp}-${random}`;
+        // Generate sequential task ID for new tasks
+        if (!this.currentProject) {
+            return 'TSK-1';
+        }
+
+        // If tasks are not loaded yet, warn and use a temporary ID
+        if (!this.tasksLoaded && this.tasks.length === 0) {
+            console.warn('⚠️ Tasks not loaded yet, generating temporary ID. This should be replaced with proper sequential ID.');
+            const timestamp = Date.now().toString().slice(-3);
+            return `${this.currentProject.id.toUpperCase()}-TEMP-${timestamp}`;
+        }
+
+        // First, try to detect the project code from existing tasks
+        let projectPrefix = this.getProjectPrefix();
+
+        // Find all existing tasks for this project that follow the sequential pattern
+        const projectTasks = this.tasks.filter(task => {
+            if (!task.id) return false;
+
+            // Check if task ID starts with the project prefix followed by a dash and number
+            const pattern = new RegExp(`^${projectPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-\\d+$`);
+            return pattern.test(task.id);
+        });
+
+        // Extract the highest number from existing task IDs
+        let maxNumber = 0;
+        projectTasks.forEach(task => {
+            const match = task.id.match(new RegExp(`^${projectPrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-(\\d+)$`));
+            if (match) {
+                const number = parseInt(match[1], 10);
+                if (number > maxNumber) {
+                    maxNumber = number;
+                }
+            }
+        });
+
+        // Generate next sequential number
+        const nextNumber = maxNumber + 1;
+        const taskId = `${projectPrefix}-${nextNumber}`;
+
+        console.log(`🆔 Generated sequential task ID: ${taskId} (from ${projectTasks.length} existing tasks, max number was ${maxNumber})`);
+        return taskId;
+    }
+
+    getProjectPrefix() {
+        // Try to detect project prefix from existing tasks
+        if (this.tasks && this.tasks.length > 0) {
+            // Look for common patterns in existing task IDs
+            const patterns = {};
+
+            this.tasks.forEach(task => {
+                if (task.id) {
+                    // Extract potential prefix (everything before the last dash-number pattern)
+                    const match = task.id.match(/^([A-Z-]+)-\d+$/);
+                    if (match) {
+                        const prefix = match[1];
+                        patterns[prefix] = (patterns[prefix] || 0) + 1;
+                    }
+                }
+            });
+
+            // Find the most common prefix
+            let mostCommonPrefix = null;
+            let maxCount = 0;
+            for (const [prefix, count] of Object.entries(patterns)) {
+                if (count > maxCount) {
+                    maxCount = count;
+                    mostCommonPrefix = prefix;
+                }
+            }
+
+            if (mostCommonPrefix && maxCount > 0) {
+                console.log(`🔍 Detected project prefix: ${mostCommonPrefix} (${maxCount} tasks)`);
+                return mostCommonPrefix;
+            }
+        }
+
+        // Fallback to predefined mappings or project name
+        const projectId = this.currentProject.id.toLowerCase();
+        const prefixMap = {
+            'androidailibrary': 'AAL',
+            'gbl-commander-kmp': 'GBL-KMP',
+            'tasks': 'TSK'
+        };
+
+        const prefix = prefixMap[projectId] || this.currentProject.id.toUpperCase();
+        console.log(`🔍 Using fallback prefix: ${prefix} for project: ${projectId}`);
+        return prefix;
+    }
+
+    async generateTaskIdAsync() {
+        // Ensure tasks are loaded before generating ID
+        if (!this.tasksLoaded) {
+            console.log('🔄 Tasks not loaded yet, loading them first...');
+            await this.loadProjectTasks();
+        }
+        return this.generateTaskId();
     }
 
     async loadProjectTasks() {
-        console.log(`🔍 loadProjectTasks called - flag status: ${this.tasksLoaded}, project: ${this.currentProject?.id}`);
+        console.log(`🔍 loadProjectTasks v2.3 called - flag status: ${this.tasksLoaded}, project: ${this.currentProject?.id}`);
         
-        // Prevent double loading
-        if (this.tasksLoaded) {
+        // Check if we're loading the same project to prevent unnecessary reloads
+        if (this.tasksLoaded && this.lastLoadedProject === this.currentProject?.id) {
             console.log(`⏭️ Tasks already loaded for project: ${this.currentProject.id}, skipping`);
             return;
         }
         
+        // CRITICAL FIX: Use existing data if global data manager already has it loaded
+        if (window.globalDataManager && window.globalDataManager.isDataLoaded()) {
+            const availableTasks = window.globalDataManager.getTasksForProject(this.currentProject.id);
+            if (availableTasks && availableTasks.length > 0) {
+                console.log(`✅ v2.3 FIX: Global data already loaded with ${availableTasks.length} tasks for project ${this.currentProject.id}, using existing data WITHOUT reload`);
+                this.tasks = availableTasks;
+                this.tasksLoaded = true;
+                this.lastLoadedProject = this.currentProject.id;
+                this.checkForDuplicates('loadProjectTasks v2.3 using existing data');
+                return;
+            }
+        }
+        
+        console.log(`🔄 v2.3 FIX: Need to load fresh data for project: ${this.currentProject?.id}`);
+        
         try {
             console.log(`🔍 Loading tasks for project: ${this.currentProject.id}`);
-            this.tasksLoaded = true; // Set flag immediately to prevent concurrent calls
-            console.log(`🔒 Set tasksLoaded flag to true`);
             
             // Debug: Check directory handle status
             console.log('🔍 Directory handle debug:');
@@ -300,11 +836,53 @@ class ProjectBoard {
                     await window.globalDataManager.initialize();
                     console.log(`✅ Global data manager initialized. Data loaded: ${window.globalDataManager.isDataLoaded()}`);
                     
+                    // For web version, give extra time for async operations to complete
+                    const isWeb = window.location.hostname.includes("onix-systems-android-tasks");
+                    if (isWeb) {
+                        console.log('🌐 Web version detected - waiting for data loading...');
+                        // Wait a bit more for async operations
+                        let attempts = 0;
+                        while (!window.globalDataManager.isDataLoaded() && attempts < 10) {
+                            console.log(`⏳ Waiting for data loading... attempt ${attempts + 1}/10`);
+                            await new Promise(resolve => setTimeout(resolve, 200));
+                            attempts++;
+                        }
+                    }
+                    
                     // Check if initialization was successful
                     if (!window.globalDataManager.isDataLoaded()) {
-                        console.log('❌ Global data manager initialization failed');
-                        this.redirectToDashboard('Failed to load project data');
-                        return;
+                        console.log('❌ Global data manager initialization failed after waiting');
+                        console.log('📊 Loading mode:', window.globalDataManager.loadingMode);
+                        console.log('📊 Projects count:', window.globalDataManager.projects?.length || 0);
+                        console.log('📊 API Client available:', !!window.globalDataManager.apiClient);
+                        console.log('📊 Static data available:', !!window.PROJECTS_DATA);
+                        console.log('📊 User role:', this.getUserRole());
+                        console.log('📊 Is web version:', this.isWebVersion);
+                        
+                        // Try force initialization with static data as last resort
+                        if (window.PROJECTS_DATA && window.PROJECTS_DATA.length > 0) {
+                            console.log('🔄 Attempting emergency fallback to static data...');
+                            try {
+                                window.globalDataManager.loadFromStaticData();
+                                window.globalDataManager.isLoaded = true;
+                                console.log('✅ Emergency fallback successful - projects:', window.globalDataManager.projects?.length);
+                                
+                                // Double check that data was loaded
+                                if (!window.globalDataManager.projects || window.globalDataManager.projects.length === 0) {
+                                    console.log('❌ Emergency fallback failed - no projects loaded');
+                                    this.redirectToDashboard('Failed to load project data (emergency fallback failed)');
+                                    return;
+                                }
+                            } catch (fallbackError) {
+                                console.error('❌ Emergency fallback error:', fallbackError);
+                                this.redirectToDashboard('Failed to load project data (fallback error)');
+                                return;
+                            }
+                        } else {
+                            console.log('❌ No static data available for fallback');
+                            this.redirectToDashboard('Failed to load project data (no fallback data)');
+                            return;
+                        }
                     }
                 } catch (error) {
                     console.error('❌ Failed to initialize global data manager:', error);
@@ -315,27 +893,39 @@ class ProjectBoard {
             
             // Get tasks from global data manager
             if (window.globalDataManager && window.globalDataManager.isDataLoaded()) {
+                console.log(`🔄 TASK LOADING: Getting tasks for project "${this.currentProject.id}"`);
                 this.tasks = window.globalDataManager.getTasksForProject(this.currentProject.id);
-                console.log(`📝 Loaded ${this.tasks.length} tasks for project ${this.currentProject.id}`);
+                console.log(`📝 TASK LOADING: Loaded ${this.tasks.length} tasks for project "${this.currentProject.id}"`);
                 this.checkForDuplicates('after loadProjectTasks');
                 
+                // Track the last successfully loaded project and mark as loaded
+                this.lastLoadedProject = this.currentProject.id;
+                this.tasksLoaded = true;
+                console.log(`🏷️ TASK LOADING: Set lastLoadedProject to "${this.lastLoadedProject}" and tasksLoaded to true`);
+                
                 if (this.tasks.length === 0) {
-                    console.warn(`⚠️ No tasks found for project ${this.currentProject.id}. Available projects:`, 
+                    console.warn(`⚠️ TASK LOADING: No tasks found for project ${this.currentProject.id}. Available projects:`, 
                         window.globalDataManager.getProjects().map(p => p.id));
                 }
                 
-                // Debug: show first few tasks
-                this.tasks.slice(0, 3).forEach(task => {
-                    console.log(`   - ${task.id}: ${task.title} (${task.column})`);
+                // Debug: show first few tasks with detailed info
+                console.log(`🔍 TASK LOADING: First 3 tasks for project "${this.currentProject.id}":`);
+                this.tasks.slice(0, 3).forEach((task, index) => {
+                    console.log(`   ${index + 1}. ${task.id}: "${task.title}" (column: ${task.column}, projectId: ${task.projectId})`);
                 });
             } else {
-                console.warn('❌ Global data not loaded, using sample tasks');
+                console.warn('❌ TASK LOADING: Global data not loaded, using sample tasks');
                 this.loadSampleTasks();
+                this.lastLoadedProject = this.currentProject.id;
+                this.tasksLoaded = true;
+                console.log(`🏷️ TASK LOADING: Set lastLoadedProject to "${this.lastLoadedProject}" and tasksLoaded to true (sample tasks)`);
             }
         } catch (error) {
             console.error('❌ Failed to load project tasks:', error);
             console.warn('🔄 Falling back to sample tasks');
             this.loadSampleTasks();
+            this.tasksLoaded = true;
+            this.lastLoadedProject = this.currentProject.id;
         }
     }
 
@@ -364,7 +954,7 @@ class ProjectBoard {
                 column: 'progress',
                 timeSpent: '4h',
                 timeEstimate: '6h',
-                assignee: 'John Smith',
+                assignee: 'dev-john',
                 priority: 'low',
                 developer: 'dev-john'
             },
@@ -374,7 +964,7 @@ class ProjectBoard {
                 column: 'progress',
                 timeSpent: '1h',
                 timeEstimate: '8h',
-                assignee: 'Mary Johnson',
+                assignee: 'dev-mary',
                 priority: 'low',
                 developer: 'dev-mary'
             },
@@ -394,7 +984,7 @@ class ProjectBoard {
                 column: 'testing',
                 timeSpent: '2h',
                 timeEstimate: '4h',
-                assignee: 'John Smith',
+                assignee: 'dev-john',
                 priority: 'high',
                 developer: 'dev-john'
             },
@@ -404,7 +994,7 @@ class ProjectBoard {
                 column: 'done',
                 timeSpent: '6h',
                 timeEstimate: '6h',
-                assignee: 'Mary Johnson',
+                assignee: 'dev-mary',
                 priority: 'high',
                 developer: 'dev-mary'
             },
@@ -531,15 +1121,42 @@ class ProjectBoard {
 
     updateDeveloperDropdown() {
         const developerSelect = document.getElementById('developerFilter');
+        if (!developerSelect) {
+            console.log('⚠️ Developer filter dropdown not found - page may not be loaded yet');
+            return;
+        }
         const currentSelection = developerSelect.value;
         
-        // Get unique developers from tasks
+        // Get unique developers from multiple sources
         const developers = new Set();
+
+        // Get developers from existing tasks
         this.tasks.forEach(task => {
             if (task.developer) {
                 developers.add(task.developer);
             }
         });
+
+        // Get developers from current project's developers list
+        if (this.currentProject && this.currentProject.developers && Array.isArray(this.currentProject.developers)) {
+            this.currentProject.developers.forEach(dev => {
+                if (dev && dev.trim()) {
+                    developers.add(dev.trim());
+                }
+            });
+        }
+
+        // Get developers from globalDataManager cache
+        if (window.globalDataManager && window.globalDataManager.projectDevelopers && this.currentProject) {
+            const projectDevelopers = window.globalDataManager.projectDevelopers[this.currentProject.id];
+            if (projectDevelopers && Array.isArray(projectDevelopers)) {
+                projectDevelopers.forEach(dev => {
+                    if (dev && dev.trim()) {
+                        developers.add(dev.trim());
+                    }
+                });
+            }
+        }
         
         // Update dropdown options
         developerSelect.innerHTML = `
@@ -567,11 +1184,18 @@ class ProjectBoard {
         // Extra safety - deduplicate filtered tasks before rendering
         this.filteredTasks = this.deduplicateTasks(this.filteredTasks);
         console.log(`🎨 renderBoard: After deduplication ${this.filteredTasks.length} filtered tasks`);
-        
+
         const columns = ['backlog', 'progress', 'review', 'testing', 'done'];
         columns.forEach(columnId => {
             const columnContent = document.querySelector(`[data-column="${columnId}"]`);
-            const columnTasks = this.filteredTasks.filter(task => task.column === columnId);
+            let columnTasks = this.filteredTasks.filter(task => task.column === columnId);
+
+            // Apply column-specific sorting if exists
+            if (this.columnSortStates[columnId]) {
+                const sortState = this.columnSortStates[columnId];
+                columnTasks = this.sortTasksByTitle(columnTasks, sortState.direction);
+                console.log(`🔄 Applied ${sortState.direction} sorting to ${columnId} column`);
+            }
 
             // Update count in Figma header
             const countElement = document.getElementById(`${columnId}Count`);
@@ -582,37 +1206,42 @@ class ProjectBoard {
             // Clear only task cards, preserve any existing structure
             const existingTaskCards = columnContent.querySelectorAll('.task-card');
             existingTaskCards.forEach(card => card.remove());
-            
+
             // Add or remove 'empty' class based on task count
             if (columnTasks.length === 0) {
                 columnContent.classList.add('empty');
             } else {
                 columnContent.classList.remove('empty');
             }
-            
+
             // Add task cards
             columnTasks.forEach(task => {
                 const taskCard = this.createTaskCard(task);
                 columnContent.appendChild(taskCard);
             });
         });
-        
+
+        // Restore column sort visual indicators
+        this.restoreColumnSortIndicators();
+
         // Equalize column heights after rendering
         this.equalizeColumnHeights();
 
-        // Reset drop zones flag to ensure they get re-setup after DOM changes
-        this.dropZonesSetup = false;
+        // Setup UI permissions based on user role
+        this.setupUIPermissions();
 
-        // Setup drop zones after a small delay to ensure DOM is ready
-        setTimeout(() => {
-            this.setupDropZones();
-        }, 50);
-
+        console.log('✅ Board rendered and permissions set');
+        
+        // Update analytics if in analytics view
+        if (this.currentView === 'analytics') {
+            this.updateAnalyticsMetrics();
+        }
+        
         // Update assignee dropdown after rendering tasks (ensure we have latest developers)
         // Only update if we're not currently in a modal to avoid interfering with current editing
         if (!document.getElementById('taskDetailModal')?.style.display?.includes('flex') &&
             !document.getElementById('createTaskDetailModal')?.style.display?.includes('flex')) {
-            this.updateAssigneeDropdown();
+            this.updateAssigneeDropdown().catch(console.error);
         }
     }
     
@@ -646,8 +1275,18 @@ class ProjectBoard {
     createTaskCard(task) {
         const card = document.createElement('div');
         card.className = 'task-card';
-        card.draggable = true;
-        console.log('📋 Created draggable card for task:', task.id);
+        
+        // Only make draggable if user can edit
+        if (this.canEdit()) {
+            card.draggable = true;
+            card.classList.remove('viewer-readonly');
+            console.log('📋 Created draggable card for task:', task.id);
+        } else {
+            card.draggable = false;
+            card.classList.add('viewer-readonly');
+            console.log('👁️ Created read-only card for task:', task.id, '(viewer mode)');
+        }
+        
         card.dataset.taskId = task.id;
         
         card.innerHTML = `
@@ -657,7 +1296,7 @@ class ProjectBoard {
                     <svg class="time-icon" viewBox="0 0 16 16" fill="currentColor">
                         <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0zM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0zm7-3.25v2.992l2.028.812a.75.75 0 0 1-.557 1.392l-2.5-1A.751.751 0 0 1 7 8.25v-3.5a.75.75 0 0 1 1.5 0z"/>
                     </svg>
-                    ${task.timeSpent || '0'}/${task.timeEstimate || '0'}
+                    ${this.formatTime(this.parseTime(task.timeSpent || '0h'))}/${this.formatTime(this.parseTime(task.timeEstimate || '0h'))}
                 </div>
             </div>
             <div class="task-name">${task.title}</div>
@@ -668,7 +1307,24 @@ class ProjectBoard {
         `;
         
         // Add event listeners
+        let isDragging = false;
+        
+        card.addEventListener('mousedown', () => {
+            isDragging = false;
+        });
+        
+        card.addEventListener('dragstart', () => {
+            isDragging = true;
+        });
+        
         card.addEventListener('click', (e) => {
+            // Don't handle click if we just finished dragging
+            if (isDragging) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+            
             // Check if time display was clicked
             if (e.target.closest('.task-time')) {
                 e.stopPropagation();
@@ -678,79 +1334,101 @@ class ProjectBoard {
             this.openTaskDetail(task);
         });
 
-        // Drag and drop
-        card.addEventListener('dragstart', (e) => {
-            this.handleDragStart(e, task);
-        });
+        // Drag and drop - only for editors
+        if (this.canEdit()) {
+            card.addEventListener('dragstart', (e) => {
+                this.handleDragStart(e, task);
+            });
 
-        card.addEventListener('dragend', (e) => {
-            this.handleDragEnd(e);
-        });
+            card.addEventListener('dragend', (e) => {
+                this.handleDragEnd(e);
+            });
+        }
 
         return card;
     }
 
+    removeDropZones() {
+        console.log('🗑️ Removing drop zones for viewer mode');
+        const columns = document.querySelectorAll('.column-content');
+        columns.forEach(column => {
+            // Remove all drag and drop event listeners by cloning and replacing
+            const newColumn = column.cloneNode(true);
+            column.parentNode.replaceChild(newColumn, column);
+        });
+        
+        // Reset the setup flag so drop zones can be set up again if needed
+        this.dropZonesSetup = false;
+    }
+
     setupDropZones() {
-        if (this.dropZonesSetup) {
-            console.log('🎯 Drop zones already set up, skipping...');
+        // Only set up drop zones for editors
+        if (!this.canEdit()) {
+            console.log('👁️ Skipping drop zone setup for viewer');
             return;
         }
-
-        console.log('🎯 Setting up drop zones for kanban board...');
-        const columnContents = document.querySelectorAll('.column-content');
-        const kanbanColumns = document.querySelectorAll('.kanban-column');
-
-        // Setup drop zones on column contents
-        columnContents.forEach(column => {
+        
+        // Prevent duplicate setup
+        if (this.dropZonesSetup) {
+            console.log('⚠️ Drop zones already setup, skipping...');
+            return;
+        }
+        
+        console.log('🎯 Setting up drop zones for editor mode...');
+        console.log('🔧 User role:', this.getUserRole(), 'Can edit:', this.canEdit());
+        const columns = document.querySelectorAll('.kanban-column');
+        console.log('📋 Found', columns.length, 'kanban columns');
+        
+        columns.forEach((column, index) => {
+            console.log(`📋 Setting up column ${index}:`, column.dataset.column);
+            
             column.addEventListener('dragover', (e) => {
                 e.preventDefault();
                 column.classList.add('drag-over');
+                console.log('👆 Drag over column:', column.dataset.column);
             });
 
             column.addEventListener('dragleave', (e) => {
                 // Only remove drag-over if we're not entering a child element
                 if (!column.contains(e.relatedTarget)) {
                     column.classList.remove('drag-over');
+                    console.log('👈 Drag leave column:', column.dataset.column);
                 }
             });
 
             column.addEventListener('drop', (e) => {
                 e.preventDefault();
                 column.classList.remove('drag-over');
+                console.log('🎯 Drop on column:', column.dataset.column);
                 this.handleDrop(e, column.dataset.column);
             });
         });
-
-        // Also setup drop zones on kanban columns as fallback
-        kanbanColumns.forEach(column => {
-            column.addEventListener('dragover', (e) => {
+        
+        // Also add drop zones to column contents as fallback
+        const columnContents = document.querySelectorAll('.column-content');
+        columnContents.forEach((columnContent, index) => {
+            console.log(`📋 Setting up column content ${index}:`, columnContent.dataset.column);
+            
+            columnContent.addEventListener('dragover', (e) => {
                 e.preventDefault();
-                column.classList.add('drag-over');
+                columnContent.classList.add('drag-over');
             });
 
-            column.addEventListener('dragleave', (e) => {
-                // Only remove drag-over if we're not entering a child element
-                if (!column.contains(e.relatedTarget)) {
-                    column.classList.remove('drag-over');
-                }
-            });
-
-            column.addEventListener('drop', (e) => {
+            columnContent.addEventListener('drop', (e) => {
                 e.preventDefault();
-                column.classList.remove('drag-over');
-                const columnContent = column.querySelector('.column-content');
-                if (columnContent?.dataset.column) {
-                    this.handleDrop(e, columnContent.dataset.column);
-                }
+                columnContent.classList.remove('drag-over');
+                console.log('🎯 Drop on column content:', columnContent.dataset.column);
+                this.handleDrop(e, columnContent.dataset.column);
             });
         });
-
+        
         // Mark drop zones as setup
         this.dropZonesSetup = true;
         console.log('✅ Drop zones setup completed');
     }
 
     handleDragStart(e, task) {
+        console.log('🎬 Drag start:', task.id);
         this.draggedTask = task;
         e.target.classList.add('dragging');
         e.dataTransfer.effectAllowed = 'move';
@@ -761,54 +1439,68 @@ class ProjectBoard {
         e.target.classList.remove('dragging');
         this.draggedTask = null;
     }
+    
+    getDragAfterElement(container, y) {
+        const draggableElements = [...container.querySelectorAll('.task-card:not(.dragging)')];
+        
+        return draggableElements.reduce((closest, child) => {
+            const box = child.getBoundingClientRect();
+            const offset = y - box.top - box.height / 2;
+            
+            if (offset < 0 && offset > closest.offset) {
+                return { offset: offset, element: child };
+            } else {
+                return closest;
+            }
+        }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
 
-    async handleDrop(e, targetColumn) {
+    handleDrop(e, targetColumn) {
         console.log('🎯 Drop event on column:', targetColumn, 'with task:', this.draggedTask?.id);
         if (!this.draggedTask) return;
-
+        
         if (this.draggedTask.column !== targetColumn) {
             const oldColumn = this.draggedTask.column;
-
+            
             // Update task column and status
             this.draggedTask.column = targetColumn;
             this.draggedTask.status = targetColumn;
-
+            
             // Find and update in tasks array
             const taskIndex = this.tasks.findIndex(t => t.id === this.draggedTask.id);
-            if (taskIndex !== -1) {
-                this.tasks[taskIndex].column = targetColumn;
-                this.tasks[taskIndex].status = targetColumn;
-
-                console.log('💾 Saving task after drag-and-drop:', {
-                    id: this.draggedTask.id,
-                    oldColumn: oldColumn,
-                    newColumn: targetColumn,
-                    task: this.tasks[taskIndex]
-                });
-
-                // Save the task to persist the change
-                try {
-                    await this.saveTaskDirectly(this.tasks[taskIndex]);
-                    console.log('✅ Task saved successfully after drag-and-drop');
-                } catch (error) {
-                    console.error('❌ Failed to save task after drag-and-drop:', error);
-                    // Revert the change if save failed
-                    this.draggedTask.column = oldColumn;
-                    this.draggedTask.status = oldColumn;
-                    this.tasks[taskIndex].column = oldColumn;
-                    this.tasks[taskIndex].status = oldColumn;
-                    this.showMessage('Failed to move task. Please try again.', 'error');
-                    return;
-                }
+            if (taskIndex === -1) {
+                console.error('🚨 Task not found in tasks array for drag operation:', this.draggedTask.id);
+                console.log('📋 Available tasks:', this.tasks.map(t => t.id));
+                return;
             }
+            
+            this.tasks[taskIndex].column = targetColumn;
+            this.tasks[taskIndex].status = targetColumn;
+            
+            // Update status dropdown if task modal is open
+            const taskStatusSelect = document.getElementById('taskStatusSelect');
 
+            if (taskStatusSelect && this.currentTask && this.currentTask.id === this.draggedTask.id) {
+                taskStatusSelect.value = targetColumn;
+            }
+            
             // Re-render board
             this.filterAndRenderTasks();
-
-            // Show success message
+            
+            // Save changes using the complete task object with all content preserved
+            const fullTask = this.tasks[taskIndex];
+            console.log('💾 Saving full task object during drag-and-drop:', {
+                id: fullTask.id,
+                hasContent: !!fullTask.content,
+                hasFullContent: !!fullTask.fullContent,
+                contentLength: fullTask.fullContent ? fullTask.fullContent.length : 0
+            });
+            this.saveTaskChanges(fullTask, { skipRerender: true, closeAfterSave: false, skipSuccessMessage: true });
+            
+            // Show specific success message for drag and drop
             this.showMessage(`Task ${this.draggedTask.id} moved to ${targetColumn}`, 'success');
-
-            console.log(`✅ Task ${this.draggedTask.id} moved from ${oldColumn} to ${targetColumn}`);
+            
+            console.log(`Task ${this.draggedTask.id} moved from ${oldColumn} to ${targetColumn}`);
         }
     }
 
@@ -877,7 +1569,7 @@ class ProjectBoard {
         
         const modal = document.getElementById('taskDetailModal');
         
-        // Load full task content from file if using file system
+        // Load full task content from server or file system
         if (window.globalDataManager && window.globalDataManager.isDataLoaded()) {
             try {
                 const fullTaskContent = await window.globalDataManager.getFullTaskContent(this.currentProject.id, task);
@@ -892,6 +1584,24 @@ class ProjectBoard {
         // Remember currently opened task so we can persist on close/navigation
         this.currentTask = task;
         
+        // CRITICAL FIX: Check and update URL BEFORE showing modal to prevent flash
+        let shouldUpdateUrl = false;
+        if (window.firaRouter && this.currentProject) {
+            const currentParams = window.firaRouter.getCurrentParams();
+            if (currentParams.projectname) {
+                const taskParam = encodeURIComponent(task.id || task.title || task.name);
+                const expectedTaskParam = currentParams.taskname || currentParams.taskId;
+                
+                // Only update URL if we're not already showing this task
+                if (!expectedTaskParam || decodeURIComponent(expectedTaskParam) !== (task.id || task.title || task.name)) {
+                    shouldUpdateUrl = true;
+                    console.log('🔗 Need to update URL for task sharing');
+                } else {
+                    console.log('🔗 URL already shows correct task, not updating');
+                }
+            }
+        }
+        
         // Initialize modal with task data
         this.populateTaskModal(task);
         
@@ -901,35 +1611,97 @@ class ProjectBoard {
         
         // Set up modal event listeners
         this.setupTaskModalEventListeners(task);
+        
+        // Update URL AFTER modal is shown to prevent navigation interference
+        if (shouldUpdateUrl && window.firaRouter && this.currentProject) {
+            const currentParams = window.firaRouter.getCurrentParams();
+            if (currentParams.projectname) {
+                const taskParam = encodeURIComponent(task.id || task.title || task.name);
+                const newUrl = `/project/${encodeURIComponent(currentParams.projectname)}/${taskParam}`;
+                
+                // Use history.replaceState instead of navigateTo to avoid router triggering
+                window.history.replaceState({}, '', newUrl);
+                window.firaRouter.currentRoute = newUrl;
+                console.log('🔗 Updated URL silently for task sharing:', newUrl);
+            }
+        }
     }
     
     // Method to open task by name/ID - used by router
-    openTaskByName(taskName) {
-        console.log('Looking for task:', taskName);
-        
-        // Try to find task in current tasks array
-        const task = this.tasks.find(t => 
-            t.id === taskName || 
-            t.title === taskName ||
-            t.id.toLowerCase() === taskName.toLowerCase() ||
-            t.title.toLowerCase() === taskName.toLowerCase()
-        );
-        
+    openTaskByName(taskIdentifier) {
+        console.log('🔍 Looking for task with identifier:', taskIdentifier);
+        console.log('📝 Available tasks:', this.tasks.length);
+
+        if (!this.tasks || this.tasks.length === 0) {
+            console.warn('❌ No tasks loaded yet, waiting for tasks to load...');
+            // Try again after a delay
+            setTimeout(() => {
+                if (this.tasks && this.tasks.length > 0) {
+                    this.openTaskByName(taskIdentifier);
+                } else {
+                    this.showMessage(`Task "${taskIdentifier}" cannot be opened - no tasks loaded`, 'error');
+                }
+            }, 500);
+            return;
+        }
+
+        // Try to find task by ID first (exact match), then by title
+        let task = this.tasks.find(t => t.id === taskIdentifier);
+
+        if (!task) {
+            // Try case-insensitive ID match
+            task = this.tasks.find(t => t.id.toLowerCase() === taskIdentifier.toLowerCase());
+        }
+
+        if (!task) {
+            // Try exact title match
+            task = this.tasks.find(t => t.title === taskIdentifier);
+        }
+
+        if (!task) {
+            // Try case-insensitive title match
+            task = this.tasks.find(t => t.title.toLowerCase() === taskIdentifier.toLowerCase());
+        }
+
         if (task) {
-            console.log('Found task:', task);
+            console.log('✅ Found task:', task.id, '-', task.title);
             this.openTaskDetail(task);
-            
-            // Update URL to include task name
+
+            // Update URL to include task ID (use ID for consistency)
             if (window.firaRouter) {
                 const currentParams = window.firaRouter.getCurrentParams();
-                if (currentParams.projectname && !currentParams.taskname) {
-                    window.firaRouter.navigateTo(`/project/${encodeURIComponent(currentParams.projectname)}/${encodeURIComponent(taskName)}`, true);
+                const expectedTaskParam = currentParams.taskname || currentParams.taskId;
+
+                if (currentParams.projectname && (!expectedTaskParam || decodeURIComponent(expectedTaskParam) !== task.id)) {
+                    const projectUrl = `/project/${encodeURIComponent(currentParams.projectname)}`;
+                    const taskUrl = `/project/${encodeURIComponent(currentParams.projectname)}/task/${encodeURIComponent(task.id)}`;
+
+                    // Check if current URL is already a task URL (has /task/ in it)
+                    const currentPath = window.location.pathname;
+                    const isCurrentlyOnTask = currentPath.includes('/task/');
+
+                    if (!isCurrentlyOnTask) {
+                        // We're on project board, need to add project URL to history first
+                        console.log('🔗 Adding project board to history before task');
+                        window.history.replaceState({ path: projectUrl }, '', projectUrl);
+                        // Then push task URL as new entry
+                        window.history.pushState({ path: taskUrl }, '', taskUrl);
+                        window.firaRouter.currentRoute = taskUrl;
+                    } else {
+                        // Already on a task, just navigate normally
+                        window.firaRouter.navigateTo(taskUrl, true);
+                    }
+                    console.log('🔗 Updated URL for task ID:', task.id);
+                } else {
+                    console.log('🔗 URL already shows correct task, not updating from openTaskByName');
                 }
             }
         } else {
-            console.warn('Task not found:', taskName);
+            console.warn('❌ Task not found:', taskIdentifier);
+            console.log('📋 Available task IDs:', this.tasks.map(t => t.id));
+            console.log('📋 Available task titles:', this.tasks.map(t => t.title));
             // Show a message to user
-            this.showMessage(`Task "${taskName}" not found in project "${this.currentProject.name}"`, 'error');
+            this.showMessage(`Task "${taskIdentifier}" not found in project "${this.currentProject.name}"`, 'error');
         }
     }
     
@@ -960,6 +1732,25 @@ class ProjectBoard {
     }
     
     initializeCreateTaskModal() {
+        // Create a new empty task and set it as current task
+        this.currentTask = {
+            id: this.generateTaskId(),
+            title: '',
+            content: '',
+            fullContent: '',
+            column: 'backlog',
+            timeEstimate: '2h',
+            timeSpent: '0h',
+            priority: 'medium',
+            developer: '',
+            assignee: '',
+            created: new Date().toISOString().substring(0, 10),
+            projectId: this.currentProject ? this.currentProject.id : '',
+            _isNew: true
+        };
+        
+        console.log('🆕 Created new currentTask for task creation:', this.currentTask);
+        
         // Clear all form fields
         const taskNameInput = document.getElementById('createTaskNameInput');
         const descriptionEditor = document.getElementById('createTaskDescriptionEditor');
@@ -975,20 +1766,20 @@ class ProjectBoard {
         if (createdDate) createdDate.textContent = new Date().toLocaleDateString();
         if (timeRemaining) timeRemaining.textContent = '2h remaining';
         
-        // Update assignee dropdown with current project developers
-        this.updateAssigneeDropdown('Unassigned');
+        // Update assignee dropdown with current project developers (force refresh to get latest)
+        this.updateAssigneeDropdown('Unassigned', true).catch(console.error);
         
-        // Set edit mode as default
+        // Set preview mode as default
         const editBtn = document.getElementById('createEditModeBtn');
         const previewBtn = document.getElementById('createPreviewModeBtn');
         const toolbar = document.getElementById('createEditorToolbar');
         const preview = document.getElementById('createTaskDescriptionPreview');
-        
-        if (editBtn) editBtn.classList.add('active');
-        if (previewBtn) previewBtn.classList.remove('active');
-        if (toolbar) toolbar.style.display = 'block';
-        if (preview) preview.style.display = 'none';
-        if (descriptionEditor) descriptionEditor.style.display = 'block';
+
+        if (editBtn) editBtn.classList.remove('active');
+        if (previewBtn) previewBtn.classList.add('active');
+        if (toolbar) toolbar.style.display = 'none';
+        if (preview) preview.style.display = 'block';
+        if (descriptionEditor) descriptionEditor.style.display = 'none';
     }
     
     setupCreateTaskModalEventListeners() {
@@ -1003,7 +1794,7 @@ class ProjectBoard {
             editBtn.addEventListener('click', () => {
                 editBtn.classList.add('active');
                 previewBtn.classList.remove('active');
-                document.getElementById('createEditorToolbar').style.display = 'block';
+                document.getElementById('createEditorToolbar').style.display = 'flex';
                 document.getElementById('createTaskDescriptionEditor').style.display = 'block';
                 document.getElementById('createTaskDescriptionPreview').style.display = 'none';
             });
@@ -1025,6 +1816,34 @@ class ProjectBoard {
                 }
             });
         }
+        
+        // Set up createEditorToolbar buttons
+        this.setupCreateEditorToolbar();
+    }
+
+    setupCreateEditorToolbar() {
+        const toolbar = document.getElementById('createEditorToolbar');
+        const descriptionEditor = document.getElementById('createTaskDescriptionEditor');
+        
+        if (!toolbar || !descriptionEditor) {
+            console.warn('createEditorToolbar or createTaskDescriptionEditor not found');
+            return;
+        }
+
+        // Remove existing listeners by cloning toolbar buttons
+        const toolbarButtons = toolbar.querySelectorAll('.toolbar-btn');
+        toolbarButtons.forEach(btn => {
+            const newBtn = btn.cloneNode(true);
+            btn.parentNode.replaceChild(newBtn, btn);
+        });
+
+        // Add fresh listeners to the new buttons
+        toolbar.querySelectorAll('.toolbar-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.handleToolbarAction(btn.dataset.command, descriptionEditor);
+            });
+        });
     }
     
     populateTaskModal(task) {
@@ -1065,6 +1884,7 @@ class ProjectBoard {
         const taskTimeSpent = document.getElementById('taskTimeSpent');
         const taskPriority = document.getElementById('taskPriority');
         const taskPrioritySelect = document.getElementById('taskPrioritySelect');
+        const taskStatusSelect = document.getElementById('taskStatusSelect');
         
         taskAssignee.value = task.developer || '';
         taskEstimate.value = task.timeEstimate || '0';
@@ -1072,6 +1892,14 @@ class ProjectBoard {
         taskTimeSpent.value = task.timeSpent || '';
         if (taskPriority) taskPriority.value = task.priority || 'low';
         if (taskPrioritySelect) taskPrioritySelect.value = task.priority || 'low';
+
+        if (taskStatusSelect) {
+            const taskInd = this.tasks.findIndex(t => t.id === task.id);
+            // Use the actual task status/column, fallback to 'backlog' only if both are empty
+            const actualStatus = this.tasks[taskInd]?.column || this.tasks[taskInd]?.status || task.status || task.column || 'backlog';
+            taskStatusSelect.value = actualStatus;
+            console.log('Setting task status select to:', actualStatus);
+        }
         
         // Sync estimate with estimateInput field
         const estimateInput = document.getElementById('estimateInput');
@@ -1112,8 +1940,8 @@ class ProjectBoard {
     }
     
     updateVisibleTaskFields(task) {
-        // Update assignee dropdown with current project developers
-        this.updateAssigneeDropdown(task.developer || 'Unassigned');
+        // Update assignee dropdown with current project developers (force refresh to get latest)
+        this.updateAssigneeDropdown(task.developer || 'Unassigned', true).catch(console.error);
         
         // Update assignee badge
         const assigneeBadge = document.querySelector('.assignee-badge span');
@@ -1159,19 +1987,47 @@ class ProjectBoard {
         }
     }
     
-    updateAssigneeDropdown(selectedAssignee = 'Unassigned') {
-        // Get all developers from current tasks
-        const developers = new Set();
+    clearDevelopersCache() {
+        // Clear developers cache for the current project
+        if (window.globalDataManager && this.currentProject) {
+            if (window.globalDataManager.projectDevelopers) {
+                delete window.globalDataManager.projectDevelopers[this.currentProject.id];
+                console.log(`🗑️ Cleared developers cache for project: ${this.currentProject.id}`);
+            }
+        }
+    }
+
+    async updateAssigneeDropdown(selectedAssignee = 'Unassigned', forceRefresh = false) {
+        // Get developers from project progress folder structure
+        let developers = new Set();
         
-        // Add developers from all tasks in the current project
-        this.tasks.forEach(task => {
-            if (task.developer && task.developer.trim()) {
-                developers.add(task.developer.trim());
+        try {
+            if (this.currentProject && this.currentProject.id) {
+                // Force refresh to get latest developers from filesystem
+                const projectDevelopers = await window.globalDataManager.getProjectDevelopers(this.currentProject.id, forceRefresh);
+                projectDevelopers.forEach(dev => developers.add(dev));
+                console.log(`👥 Found ${projectDevelopers.length} developers for dropdown:`, projectDevelopers);
             }
-            if (task.assignee && task.assignee.trim()) {
-                developers.add(task.assignee.trim());
+        } catch (error) {
+            console.warn('⚠️ Error getting project developers, trying project data:', error);
+            
+            // First fallback: use currentProject.developers if available
+            if (this.currentProject && this.currentProject.developers && Array.isArray(this.currentProject.developers)) {
+                this.currentProject.developers.forEach(dev => {
+                    if (dev && dev.trim() && (dev.startsWith('dev-') || dev.startsWith('tech-'))) {
+                        developers.add(dev.trim());
+                    }
+                });
+                console.log(`👥 Using project.developers fallback:`, this.currentProject.developers);
             }
-        });
+            
+            // Second fallback: get developers from current tasks
+            this.tasks.forEach(task => {
+                if (task.developer && task.developer.trim() && (task.developer.startsWith('dev-') || task.developer.startsWith('tech-'))) {
+                    developers.add(task.developer.trim());
+                }
+            });
+        }
         
         // Update the dropdown menu in task detail modal
         const dropdownMenu = document.getElementById('dropdownMenu');
@@ -1249,6 +2105,66 @@ class ProjectBoard {
             // Restore selection if it still exists
             if (Array.from(developerFilter.options).some(opt => opt.value === currentValue)) {
                 developerFilter.value = currentValue;
+            }
+        }
+        
+        // Update regular select elements for task assignment
+        const taskAssigneeSelect = document.getElementById('taskAssignee');
+        if (taskAssigneeSelect) {
+            // Save current selection
+            const currentTaskAssignee = taskAssigneeSelect.value;
+            
+            // Clear existing options
+            taskAssigneeSelect.innerHTML = '';
+            
+            // Add "Unassigned" option first
+            const unassignedOption = document.createElement('option');
+            unassignedOption.value = '';
+            unassignedOption.textContent = 'Unassigned';
+            taskAssigneeSelect.appendChild(unassignedOption);
+            
+            // Add all developers
+            Array.from(developers).sort().forEach(dev => {
+                const option = document.createElement('option');
+                option.value = dev;
+                option.textContent = dev;
+                taskAssigneeSelect.appendChild(option);
+            });
+            
+            // Restore selection if it still exists
+            if (currentTaskAssignee && Array.from(taskAssigneeSelect.options).some(opt => opt.value === currentTaskAssignee)) {
+                taskAssigneeSelect.value = currentTaskAssignee;
+            } else if (selectedAssignee && selectedAssignee !== 'Unassigned') {
+                taskAssigneeSelect.value = selectedAssignee;
+            }
+        }
+        
+        // Update create task assignee select
+        const newTaskAssigneeSelect = document.getElementById('newTaskAssignee');
+        if (newTaskAssigneeSelect) {
+            // Save current selection
+            const currentNewTaskAssignee = newTaskAssigneeSelect.value;
+            
+            // Clear existing options
+            newTaskAssigneeSelect.innerHTML = '';
+            
+            // Add "Unassigned" option first
+            const unassignedOption = document.createElement('option');
+            unassignedOption.value = '';
+            unassignedOption.textContent = 'Unassigned';
+            newTaskAssigneeSelect.appendChild(unassignedOption);
+            
+            // Add all developers
+            Array.from(developers).sort().forEach(dev => {
+                const option = document.createElement('option');
+                option.value = dev;
+                option.textContent = dev;
+                newTaskAssigneeSelect.appendChild(option);
+            });
+            
+            // Restore selection if it still exists
+            if (currentNewTaskAssignee && Array.from(newTaskAssigneeSelect.options).some(opt => opt.value === currentNewTaskAssignee)) {
+                newTaskAssigneeSelect.value = currentNewTaskAssignee;
             }
         }
         
@@ -1390,23 +2306,49 @@ class ProjectBoard {
                 descriptionEditor.style.display = 'none';
                 descriptionPreview.style.display = 'block';
                 taskNameInput.setAttribute('readonly', true);
-                
+
                 // Update preview with current editor content
                 descriptionPreview.innerHTML = this.convertMarkdownToHTML(descriptionEditor.value);
             });
         }
+
+        // Set preview mode as default
+        if (previewModeBtn && editModeBtn) {
+            previewModeBtn.classList.add('active');
+            editModeBtn.classList.remove('active');
+            if (editorToolbar) editorToolbar.style.display = 'none';
+            if (descriptionEditor) descriptionEditor.style.display = 'none';
+            if (descriptionPreview) descriptionPreview.style.display = 'block';
+            if (taskNameInput) taskNameInput.setAttribute('readonly', true);
+
+            // Update preview with current editor content
+            if (descriptionPreview && descriptionEditor) {
+                descriptionPreview.innerHTML = this.convertMarkdownToHTML(descriptionEditor.value);
+            }
+        }
         
-        // Rich text editor toolbar
-        document.querySelectorAll('.toolbar-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.handleToolbarAction(btn.dataset.command, descriptionEditor);
-            });
+        // Rich text editor toolbar - remove existing listeners first
+        const existingToolbarButtons = editorToolbar ? editorToolbar.querySelectorAll('.toolbar-btn') : [];
+        existingToolbarButtons.forEach(btn => {
+            const newBtn = btn.cloneNode(true);
+            btn.parentNode.replaceChild(newBtn, btn);
         });
         
-        // Character counter and live preview update
+        // Add fresh listeners to toolbar buttons
+        if (editorToolbar) {
+            editorToolbar.querySelectorAll('.toolbar-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.handleToolbarAction(btn.dataset.command, descriptionEditor);
+                });
+            });
+        }
+        
+        // Character counter, live preview update, and auto-save
         if (descriptionEditor) {
             let debounceTimer;
+            let autoSaveTimer;
+            
             descriptionEditor.addEventListener('input', () => {
                 this.updateCharacterCounter();
                 
@@ -1415,6 +2357,21 @@ class ProjectBoard {
                 debounceTimer = setTimeout(() => {
                     this.updateLivePreview();
                 }, 300);
+                
+                // Auto-save description changes after user stops typing
+                console.log('🔍 Auto-save check: currentTask exists?', !!this.currentTask, this.currentTask?.id);
+                if (this.currentTask) {
+                    clearTimeout(autoSaveTimer);
+                    console.log('⏰ Setting up auto-save timer for task:', this.currentTask.id);
+                    autoSaveTimer = setTimeout(() => {
+                        console.log('💾 Auto-saving description changes for task:', this.currentTask.id);
+                        this.saveTaskChanges(this.currentTask, { closeAfterSave: false })
+                            .then(() => console.log('✅ Description auto-saved for task:', this.currentTask.id))
+                            .catch(err => console.error('❌ Failed to auto-save description for task:', this.currentTask.id, err));
+                    }, 1500); // Wait 1.5 seconds after last change
+                } else {
+                    console.warn('⚠️ Cannot auto-save: currentTask is not set');
+                }
             });
         }
         
@@ -1481,28 +2438,85 @@ class ProjectBoard {
         const addCommentBtn = document.getElementById('addCommentBtn');
         const commentInput = document.getElementById('commentInput');
         
-        addCommentBtn.addEventListener('click', () => {
-            this.addComment(task, commentInput.value);
+        addCommentBtn.addEventListener('click', async () => {
+            await this.addComment(task, commentInput.value);
         });
         
-        commentInput.addEventListener('keypress', (e) => {
+        commentInput.addEventListener('keypress', async (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                this.addComment(task, commentInput.value);
+                await this.addComment(task, commentInput.value);
             }
         });
         
-        // Image upload
-        const imageUploadArea = document.querySelector('.image-upload-area');
-        const imageUpload = document.getElementById('imageUpload');
+        // Image upload - setup both zones (edit and create)
+        this.setupImageDropZone('imageUpload', 'taskDescriptionEditor');
+        this.setupImageDropZone('createImageUpload', 'createTaskDescriptionEditor');
         
-        if (imageUploadArea && imageUpload) {
-            imageUploadArea.addEventListener('click', () => {
-                imageUpload.click();
+        // Priority dropdown functionality
+        const taskPrioritySelect = document.getElementById('taskPrioritySelect');
+        if (taskPrioritySelect) {
+            taskPrioritySelect.addEventListener('change', (e) => {
+                const newPriority = e.target.value;
+                task.priority = newPriority;
+                
+                // Update currentTask reference
+                if (this.currentTask && this.currentTask.id === task.id) {
+                    this.currentTask.priority = newPriority;
+                }
+                
+                // Save changes automatically (don't close modal after priority change)
+                this.saveTaskChanges(task, { closeAfterSave: false });
+                console.log('Priority updated to:', newPriority);
             });
-            
-            imageUpload.addEventListener('change', (e) => {
-                this.handleImageUpload(e.target.files[0]);
+        }
+        
+        // Status dropdown functionality
+        const taskStatusSelect = document.getElementById('taskStatusSelect');
+        if (taskStatusSelect) {
+
+            taskStatusSelect.addEventListener('change', (e) => {
+                const newStatus = e.target.value;
+                const oldStatus = task.status;
+                
+                
+                // Update task status
+                task.status = newStatus;
+                task.column = newStatus; // Ensure column is synced
+                
+                // Update currentTask reference
+                if (this.currentTask && this.currentTask.id === task.id) {
+                    this.currentTask.status = newStatus;
+                    this.currentTask.column = newStatus;
+                }
+                
+                // Update task in tasks array
+                const taskIndex = this.tasks.findIndex(t => t.id === task.id);
+                if (taskIndex !== -1) {
+                    console.log(`🔄 Updating task ${task.id} in array from ${this.tasks[taskIndex].status} to ${newStatus}`);
+                    this.tasks[taskIndex].status = newStatus;
+                    this.tasks[taskIndex].column = newStatus;
+                    console.log(`✅ Task updated in array:`, this.tasks[taskIndex]);
+                } else {
+                    console.error(`❌ Task ${task.id} not found in tasks array!`);
+                }
+                
+                // Update any visible status indicators in the modal
+                const modalStatusBadges = document.querySelectorAll('.status-badge, .task-status');
+                modalStatusBadges.forEach(badge => {
+                    if (badge.closest('#taskDetailModal')) {
+                        badge.textContent = this.getStatusDisplayName(newStatus);
+                        badge.className = badge.className.replace(/status-\w+/g, '') + ` status-${newStatus}`;
+                    }
+                });
+                
+                // Re-render the board to show the task in new column
+                console.log(`🎨 Re-rendering board after status change to ${newStatus}`);
+                this.filterAndRenderTasks();
+                
+                // Save changes automatically (don't close modal after status change)
+                this.saveTaskChanges(task, { closeAfterSave: false, skipSuccessMessage: true });
+                console.log('Status updated from', oldStatus, 'to:', newStatus);
             });
         }
         
@@ -1677,6 +2691,198 @@ class ProjectBoard {
         console.log(`✅ Selected create assignee: ${value}`);
     }
     
+    // Helper function to check if a line is already quoted
+    isLineQuoted(line) {
+        return line.trim().startsWith('> ');
+    }
+
+    // Helper function to remove quote formatting from a line
+    removeQuoteFromLine(line) {
+        return line.replace(/^\s*>\s?/, '');
+    }
+
+    // Helper function to add quote formatting to a line
+    addQuoteToLine(line) {
+        return `> ${line}`;
+    }
+
+    // Helper functions for heading formatting
+    isLineHeading(line, level) {
+        const prefix = '#'.repeat(level);
+        const trimmed = line.trim();
+        // Match exact level with optional space: ## or ## text (but not ### text)
+        return trimmed.startsWith(prefix) &&
+               (trimmed.length === prefix.length || trimmed.charAt(prefix.length) === ' ') &&
+               !trimmed.startsWith(prefix + '#');
+    }
+
+    // Helper function to remove heading formatting from a line
+    removeHeadingFromLine(line) {
+        // Remove heading markers with optional space: ## text -> text, ## -> empty string
+        return line.replace(/^\s*#+\s?/, '');
+    }
+
+    // Helper function to add heading formatting to a line
+    addHeadingToLine(line, level) {
+        const prefix = '#'.repeat(level) + ' ';
+        const cleanLine = this.removeHeadingFromLine(line);
+        return `${prefix}${cleanLine}`;
+    }
+
+    // Helper function to get current heading level of a line (returns 0 if not a heading)
+    getHeadingLevel(line) {
+        // Match headings with optional space and optional text: ## or ## text
+        const match = line.trim().match(/^(#+)(\s.*)?$/);
+        return match ? match[1].length : 0;
+    }
+
+    // Helper function to handle heading toggle
+    handleHeadingToggle(textBefore, selectedText, textAfter, targetLevel) {
+        if (!selectedText) {
+            // Find the current line
+            const allText = textBefore + textAfter;
+            const lines = allText.split('\n');
+            const currentLineIndex = textBefore.split('\n').length - 1;
+            const currentLine = lines[currentLineIndex] || '';
+
+            const currentLevel = this.getHeadingLevel(currentLine);
+
+            if (currentLevel === targetLevel) {
+                // Remove heading formatting - convert back to plain text
+                const newLine = this.removeHeadingFromLine(currentLine);
+                lines[currentLineIndex] = newLine;
+                return lines.join('\n');
+            } else {
+                // Add or change heading formatting
+                const newLine = this.addHeadingToLine(currentLine, targetLevel);
+                lines[currentLineIndex] = newLine;
+                return lines.join('\n');
+            }
+        } else {
+            // Work with selected text - split into lines
+            const selectedLines = selectedText.split('\n');
+            const allSameHeading = selectedLines.every(line => this.getHeadingLevel(line) === targetLevel);
+
+            let processedLines;
+            if (allSameHeading) {
+                // Remove heading formatting from all lines
+                processedLines = selectedLines.map(line => this.removeHeadingFromLine(line));
+            } else {
+                // Add heading formatting to all lines
+                processedLines = selectedLines.map(line => this.addHeadingToLine(line, targetLevel));
+            }
+
+            return textBefore + processedLines.join('\n') + textAfter;
+        }
+    }
+
+    // Helper function to check if a line is a list item
+    isLineListItem(line) {
+        // Check for bullet lists (-, *, +) or numbered lists (1. 2. etc.)
+        return /^\s*[-*+]\s/.test(line) || /^\s*\d+\.\s/.test(line);
+    }
+
+    // Helper function to remove list formatting from a line
+    removeListFromLine(line) {
+        return line.replace(/^\s*[-*+]\s/, '').replace(/^\s*\d+\.\s/, '');
+    }
+
+    // Helper function to handle quote toggle
+    handleQuoteToggle(textBefore, selectedText, textAfter, start, end) {
+        // If no text is selected, work with the current line
+        if (!selectedText) {
+            // Find the current line
+            const allText = textBefore + textAfter;
+            const lines = allText.split('\n');
+            const currentLineIndex = textBefore.split('\n').length - 1;
+            const currentLine = lines[currentLineIndex] || '';
+
+            if (this.isLineQuoted(currentLine)) {
+                // Remove quote from current line
+                const newLine = this.removeQuoteFromLine(currentLine);
+                lines[currentLineIndex] = newLine;
+                return lines.join('\n');
+            } else {
+                // Add quote to current line
+                const newLine = this.addQuoteToLine(currentLine);
+                lines[currentLineIndex] = newLine;
+                return lines.join('\n');
+            }
+        } else {
+            // Work with selected text - split into lines
+            const selectedLines = selectedText.split('\n');
+            const allQuoted = selectedLines.every(line => this.isLineQuoted(line));
+
+            let processedLines;
+            if (allQuoted) {
+                // Remove quotes from all lines
+                processedLines = selectedLines.map(line => this.removeQuoteFromLine(line));
+            } else {
+                // Add quotes to all lines
+                processedLines = selectedLines.map(line => this.addQuoteToLine(line));
+            }
+
+            return textBefore + processedLines.join('\n') + textAfter;
+        }
+    }
+
+    // Enhanced list insertion with toggle functionality
+    handleListInsertion(textBefore, selectedText, textAfter, listPrefix) {
+        const isOrderedList = listPrefix.includes('.');
+
+        if (!selectedText) {
+            // Find the current line
+            const allText = textBefore + textAfter;
+            const lines = allText.split('\n');
+            const currentLineIndex = textBefore.split('\n').length - 1;
+            const currentLine = lines[currentLineIndex] || '';
+
+            if (this.isLineListItem(currentLine)) {
+                // Remove list formatting from current line
+                const newLine = this.removeListFromLine(currentLine);
+                lines[currentLineIndex] = newLine;
+                return lines.join('\n');
+            } else {
+                // Add list formatting to current line
+                const prefix = isOrderedList ? '1. ' : listPrefix;
+                const newLine = `${prefix}${currentLine}`;
+                lines[currentLineIndex] = newLine;
+                return lines.join('\n');
+            }
+        } else {
+            // Work with selected text - split into lines
+            const selectedLines = selectedText.split('\n');
+            // Only check non-empty lines for list formatting
+            const nonEmptyLines = selectedLines.filter(line => line.trim() !== '');
+            const allListItems = nonEmptyLines.length > 0 && nonEmptyLines.every(line => this.isLineListItem(line));
+
+            let processedLines;
+            if (allListItems) {
+                // Remove list formatting from all lines
+                processedLines = selectedLines.map(line => {
+                    if (line.trim() === '') return line; // Keep empty lines as they are
+                    return this.removeListFromLine(line);
+                });
+            } else {
+                // Add list formatting to all non-empty lines
+                if (isOrderedList) {
+                    let counter = 1;
+                    processedLines = selectedLines.map(line => {
+                        if (line.trim() === '') return line; // Keep empty lines as they are
+                        return `${counter++}. ${line}`;
+                    });
+                } else {
+                    processedLines = selectedLines.map(line => {
+                        if (line.trim() === '') return line; // Keep empty lines as they are
+                        return `${listPrefix}${line}`;
+                    });
+                }
+            }
+
+            return textBefore + processedLines.join('\n') + textAfter;
+        }
+    }
+
     handleToolbarAction(command, editor) {
         const start = editor.selectionStart;
         const end = editor.selectionEnd;
@@ -1700,16 +2906,13 @@ class ProjectBoard {
                 cursorOffset = selectedText ? 0 : -1;
                 break;
             case 'h1':
-                replacement = selectedText ? `# ${selectedText}` : '# ';
-                cursorOffset = selectedText ? 0 : 0;
+                replacement = this.handleHeadingToggle(textBefore, selectedText, textAfter, 1);
                 break;
             case 'h2':
-                replacement = selectedText ? `## ${selectedText}` : '## ';
-                cursorOffset = selectedText ? 0 : 0;
+                replacement = this.handleHeadingToggle(textBefore, selectedText, textAfter, 2);
                 break;
             case 'h3':
-                replacement = selectedText ? `### ${selectedText}` : '### ';
-                cursorOffset = selectedText ? 0 : 0;
+                replacement = this.handleHeadingToggle(textBefore, selectedText, textAfter, 3);
                 break;
             case 'ul':
                 replacement = this.handleListInsertion(textBefore, selectedText, textAfter, '- ');
@@ -1718,51 +2921,44 @@ class ProjectBoard {
                 replacement = this.handleListInsertion(textBefore, selectedText, textAfter, '1. ');
                 break;
             case 'quote':
-                replacement = selectedText ? `> ${selectedText}` : '> ';
-                cursorOffset = selectedText ? 0 : 0;
+                replacement = this.handleQuoteToggle(textBefore, selectedText, textAfter, start, end);
+                cursorOffset = 0;
                 break;
             case 'link':
                 replacement = selectedText ? `[${selectedText}]()` : `[]()`;
                 cursorOffset = selectedText ? -1 : -3;
                 break;
             case 'image':
-                replacement = selectedText ? `![${selectedText}]()` : `![]()`;
-                cursorOffset = selectedText ? -1 : -3;
-                break;
+                // Open file picker for image upload
+                this.openImagePicker(editor);
+                return; // Early return - no need to process replacement
         }
         
-        // Handle complex replacements for lists only
-        if (['ul', 'ol'].includes(command)) {
+        // Handle complex replacements for lists, quotes, and headings that return full text
+        if (['ul', 'ol', 'quote', 'h1', 'h2', 'h3'].includes(command)) {
             editor.value = replacement;
-            const searchText = selectedText || 'List item';
-            const newCursorPos = replacement.indexOf(searchText);
-            if (newCursorPos !== -1) {
-                editor.setSelectionRange(newCursorPos, newCursorPos + searchText.length);
+
+            // Find the position of the affected line after replacement
+            const lines = replacement.split('\n');
+            const textBeforeLines = textBefore.split('\n');
+            const currentLineIndex = textBeforeLines.length - 1;
+
+            // Calculate cursor position at the end of the modified line
+            let cursorPos = 0;
+            for (let i = 0; i < currentLineIndex; i++) {
+                cursorPos += lines[i].length + 1; // +1 for newline
             }
+            if (currentLineIndex < lines.length) {
+                cursorPos += lines[currentLineIndex].length;
+            }
+
+            editor.setSelectionRange(cursorPos, cursorPos);
         } else {
-            // Handle all other commands including headings and quotes
-            // For headings and quotes, ensure they start on a new line if needed
-            if (['h1', 'h2', 'h3', 'quote'].includes(command)) {
-                const needsNewLineBefore = start > 0 && !textBefore.endsWith('\n');
-                const needsNewLineAfter = end < editor.value.length && !textAfter.startsWith('\n');
-                
-                const finalReplacement = 
-                    (needsNewLineBefore ? '\n' : '') + 
-                    replacement + 
-                    (needsNewLineAfter ? '\n' : '');
-                
-                editor.setRangeText(finalReplacement, start, end, 'select');
-                
-                // Position cursor appropriately
-                const newPos = start + finalReplacement.length + cursorOffset + (needsNewLineBefore ? 1 : 0);
+            // For other commands (bold, italic, code, links, images)
+            editor.setRangeText(replacement, start, end, 'select');
+            if (cursorOffset !== 0) {
+                const newPos = start + replacement.length + cursorOffset;
                 editor.setSelectionRange(newPos, newPos);
-            } else {
-                // For other commands (bold, italic, code, links, images)
-                editor.setRangeText(replacement, start, end, 'select');
-                if (cursorOffset !== 0) {
-                    const newPos = start + replacement.length + cursorOffset;
-                    editor.setSelectionRange(newPos, newPos);
-                }
             }
         }
         
@@ -1773,25 +2969,6 @@ class ProjectBoard {
         
         // Trigger input event for any listeners
         editor.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-    
-    // Helper method to ensure proper line spacing
-    ensureNewLine(text, isAfter = false) {
-        if (isAfter) {
-            return text.endsWith('\n') ? '' : '\n';
-        }
-        return text === '' || text.endsWith('\n\n') ? '' : text.endsWith('\n') ? '\n' : '\n\n';
-    }
-    
-    // Helper method for list insertion
-    handleListInsertion(textBefore, selectedText, textAfter, listPrefix) {
-        const lines = selectedText ? selectedText.split('\n') : ['List item'];
-        const listItems = lines.map((line, index) => {
-            const prefix = listPrefix.includes('1.') ? `${index + 1}. ` : listPrefix;
-            return prefix + (line.trim() || `List item ${index + 1}`);
-        }).join('\n');
-        
-        return textBefore + this.ensureNewLine(textBefore) + listItems + this.ensureNewLine(textAfter, true) + textAfter;
     }
     
     updateCharacterCounter() {
@@ -1828,14 +3005,43 @@ class ProjectBoard {
     }
     
     parseTime(timeStr) {
-        // Convert time string like "2h" or "30m" to minutes
-        const match = timeStr.match(/(\d+)([hm])/);
-        if (match) {
-            const value = parseInt(match[1]);
-            const unit = match[2];
-            return unit === 'h' ? value * 60 : value;
+        if (!timeStr || typeof timeStr !== 'string') {
+            return 0;
         }
-        return 0;
+        
+        const cleanStr = timeStr.toLowerCase().trim();
+        if (!cleanStr) {
+            return 0;
+        }
+        
+        // Regex to match time patterns like "2w 3d 4h 30m", "2h", "30m", etc.
+        const timePattern = /(\d+(?:\.\d+)?)\s*([wdhm])/g;
+        let totalMinutes = 0;
+        
+        let match;
+        while ((match = timePattern.exec(cleanStr)) !== null) {
+            const value = parseFloat(match[1]);
+            const unit = match[2];
+            
+            if (isNaN(value) || value < 0) continue;
+            
+            switch (unit) {
+                case 'w':
+                    totalMinutes += value * 40 * 60; // weeks to minutes (1w = 40h)
+                    break;
+                case 'd':
+                    totalMinutes += value * 8 * 60; // days to minutes (1d = 8h)
+                    break;
+                case 'h':
+                    totalMinutes += value * 60; // hours to minutes
+                    break;
+                case 'm':
+                    totalMinutes += value; // already in minutes
+                    break;
+            }
+        }
+        
+        return totalMinutes;
     }
 
     // Calculate time remaining based on estimate and spent
@@ -2028,12 +3234,27 @@ class ProjectBoard {
     }
     
     formatTime(minutes) {
-        if (minutes >= 60) {
-            const hours = Math.floor(minutes / 60);
-            const remainingMinutes = minutes % 60;
-            return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
+        if (minutes === 0) {
+            return '0h';
         }
-        return `${minutes}m`;
+        
+        // Work-based time conversion: 1w = 40h, 1d = 8h
+        const weeks = Math.floor(minutes / (40 * 60)); // 40h * 60min
+        const remainingAfterWeeks = minutes % (40 * 60);
+        
+        const days = Math.floor(remainingAfterWeeks / (8 * 60)); // 8h * 60min  
+        const remainingAfterDays = remainingAfterWeeks % (8 * 60);
+        
+        const hours = Math.floor(remainingAfterDays / 60);
+        const mins = remainingAfterDays % 60;
+        
+        const parts = [];
+        if (weeks > 0) parts.push(`${weeks}w`);
+        if (days > 0) parts.push(`${days}d`);
+        if (hours > 0) parts.push(`${hours}h`);
+        if (mins > 0) parts.push(`${mins}m`);
+        
+        return parts.length > 0 ? parts.join(' ') : '0h';
     }
     
     loadActivityFeed(task) {
@@ -2048,7 +3269,7 @@ class ProjectBoard {
                 avatar: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTYiIGN5PSIxNiIgcj0iMTYiIGZpbGw9IiM4YjVjZjYiLz4KPHN2ZyB3aWR0aD0iMTgiIGhlaWdodD0iMTgiIHZpZXdCb3g9IjAgMCAyMCAyMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4PSI3IiB5PSI3Ij4KPHBhdGggZD0iTTEwIDEwYzIuMjEgMCA0LTEuNzkgNC00cy0xLjc5LTQtNC00LTQgMS43OS00IDQgMS43OSA0IDQgNHptMCAyYy0yLjY3IDAtOCAxLjM0LTggNHYyaDE2di0yYzAtMi42Ni01LjMzLTQtOC00eiIgZmlsbD0iI0ZGRiIvPgo8L3N2Zz4KPC9zdmc+'
             },
             {
-                user: 'Mary Johnson',
+                user: 'dev-mary',
                 action: 'moved this task to In Progress',
                 time: '1 hour ago',
                 avatar: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1zbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTYiIGN5PSIxNiIgcj0iMTYiIGZpbGw9IiMxMGI5ODEiLz4KPHN2ZyB3aWR0aD0iMTgiIGhlaWdodD0iMTgiIHZpZXdCb3g9IjAgMCAyMCAyMCIgZmlsbD0ibm9uZSIgeG1zbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4PSI3IiB5PSI3Ij4KPHBhdGggZD0iTTEwIDEwYzIuMjEgMCA0LTEuNzkgNC00cy0xLjc5LTQtNC00LTQgMS43OS00IDQgMS43OSA0IDQgNHptMCAyYy0yLjY3IDAtOCAxLjM0LTggNHYyaDE2di0yYzAtMi42Ni01LjMzLTQtOC00eiIgZmlsbD0iI0ZGRiIvPgo8L3N2Zz4KPC9zdmc+'
@@ -2072,22 +3293,26 @@ class ProjectBoard {
         }
     }
     
-    addComment(task, comment) {
+    async addComment(task, comment) {
         if (!comment.trim()) return;
         
         const commentInput = document.getElementById('commentInput');
         const activityFeed = document.getElementById('activityFeed');
+        
+        // Get git config for user name
+        const gitConfig = await this.getGitConfig();
+        const userName = gitConfig.name || 'User';
         
         // Add new comment to activity feed
         const newActivity = document.createElement('div');
         newActivity.className = 'activity-item';
         newActivity.innerHTML = `
             <div class="activity-avatar">
-                <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1zbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTYiIGN5PSIxNiIgcj0iMTYiIGZpbGw9IiM4YjVjZjYiLz4KPHN2ZyB3aWR0aD0iMTgiIGhlaWdodD0iMTgiIHZpZXdCb3g9IjAgMCAyMCAyMCIgZmlsbD0ibm9uZSIgeG1zbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4PSI3IiB5PSI3Ij4KPHBhdGggZD0iTTEwIDEwYzIuMjEgMCA0LTEuNzkgNC00cy0xLjc5LTQtNC00LTQgMS43OS00IDQgMS43OSA0IDQgNHptMCAyYy0yLjY3IDAtOCAxLjM0LTggNHYyaDE2di0yYzAtMi42Ni01LjMzLTQtOC00eiIgZmlsbD0iI0ZGRiIvPgo8L3N2Zz4KPC9zdmc+" alt="You" />
+                <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1zbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTYiIGN5PSIxNiIgcj0iMTYiIGZpbGw9IiM4YjVjZjYiLz4KPHN2ZyB3aWR0aD0iMTgiIGhlaWdodD0iMTgiIHZpZXdCb3g9IjAgMCAyMCAyMCIgZmlsbD0ibm9uZSIgeG1zbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4PSI3IiB5PSI3Ij4KPHBhdGggZD0iTTEwIDEwYzIuMjEgMCA0LTEuNzkgNC00cy0xLjc5LTQtNC00LTQgMS43OS00IDQgMS43OSA0IDQgNHptMCAyYy0yLjY3IDAtOCAxLjM0LTggNHYyaDE2di0yYzAtMi42Ni01LjMzLTQtOC00eiIgZmlsbD0iI0ZGRiIvPgo8L3N2Zz4KPC9zdmc+" alt="${userName}" />
             </div>
             <div class="activity-content">
                 <div class="activity-text">
-                    <strong>You</strong> commented: "${comment}"
+                    <strong>${userName}</strong> commented: "${comment}"
                 </div>
                 <div class="activity-time">just now</div>
             </div>
@@ -2100,58 +3325,156 @@ class ProjectBoard {
         activityFeed.scrollTop = activityFeed.scrollHeight;
     }
     
-    handleImageUpload(file) {
+    async handleImageUpload(file, targetEditor = null) {
         if (!file) return;
         
-        if (file.type.startsWith('image/')) {
-            // In a real app, you would upload the image to a server
-            // For now, just show a success message
-            this.showMessage('Image upload functionality would be implemented here', 'info');
-        } else {
+        if (!file.type.startsWith('image/')) {
             this.showMessage('Please select an image file', 'error');
+            return;
+        }
+        
+        if (!this.currentProject) {
+            this.showMessage('No project selected', 'error');
+            return;
+        }
+        
+        this.showMessage('Uploading image...', 'info');
+        
+        try {
+            // Create FormData for file upload
+            const formData = new FormData();
+            formData.append('image', file);
+            
+            // Upload to server
+            const response = await fetch(`/api/projects/${encodeURIComponent(this.currentProject.id)}/upload-image`, {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                this.showMessage('Image uploaded successfully!', 'success');
+                
+                // Insert markdown into the target editor
+                if (targetEditor) {
+                    this.insertTextAtCursor(targetEditor, result.markdown);
+                } else {
+                    // Default to task description editor if available
+                    const descriptionEditor = document.getElementById('taskDescriptionEditor') || 
+                                             document.getElementById('createTaskDescriptionEditor');
+                    if (descriptionEditor) {
+                        this.insertTextAtCursor(descriptionEditor, result.markdown);
+                    }
+                }
+                
+                // Auto-save the current task after image is added
+                if (this.currentTask) {
+                    console.log('💾 Auto-saving task after image upload...');
+                    this.saveTaskChanges(this.currentTask, { closeAfterSave: false })
+                        .then(() => console.log('✅ Task auto-saved after image upload'))
+                        .catch(err => console.error('❌ Failed to auto-save task after image upload:', err));
+                }
+                
+                return result;
+            } else {
+                this.showMessage(`Upload failed: ${result.error}`, 'error');
+                return null;
+            }
+        } catch (error) {
+            console.error('Image upload error:', error);
+            this.showMessage(`Upload failed: ${error.message}`, 'error');
+            return null;
         }
     }
     
-    async saveTaskDirectly(task) {
-        console.log(`💾 saveTaskDirectly: Saving task ${task.id} to individual file`);
-
-        try {
-            // Ensure task has correct projectId
-            if (!task.projectId && this.currentProject) {
-                task.projectId = this.currentProject.id;
-                console.log(`🔧 Added projectId ${task.projectId} to task ${task.id}`);
-            }
-
-            const projectId = task.projectId || this.currentProject.id;
-
-            // Primary method: Save directly to individual task file via globalDataManager
-            if (window.globalDataManager && window.globalDataManager.updateTask) {
-                console.log(`💾 Saving task ${task.id} to individual file via globalDataManager.updateTask`);
-                await window.globalDataManager.updateTask(projectId, task);
-                console.log(`✅ Task ${task.id} saved to individual file: ${task.id}.md`);
-
-                // Update local task data immediately
-                const taskIndex = this.tasks.findIndex(t => t.id === task.id);
-                if (taskIndex !== -1) {
-                    this.tasks[taskIndex] = { ...this.tasks[taskIndex], ...task };
-                    console.log(`🔄 Updated local task data for ${task.id}`);
-                }
-
-                return;
-            }
-
-            // Fallback: save all tasks to disk (less optimal but ensures data persistence)
-            console.log('⚠️ Fallback: saving all tasks to disk');
-            await this.saveTasksToDisk();
-            console.log(`✅ Task ${task.id} saved via saveTasksToDisk fallback`);
-
-        } catch (error) {
-            console.error(`❌ Failed to save task ${task.id} to individual file:`, error);
-            throw error;
-        }
+    insertTextAtCursor(editor, text) {
+        const start = editor.selectionStart;
+        const end = editor.selectionEnd;
+        const textBefore = editor.value.substring(0, start);
+        const textAfter = editor.value.substring(end);
+        
+        editor.value = textBefore + text + textAfter;
+        
+        // Move cursor after inserted text
+        const newCursorPos = start + text.length;
+        editor.focus();
+        editor.setSelectionRange(newCursorPos, newCursorPos);
+        
+        // Trigger input event for any listeners
+        editor.dispatchEvent(new Event('input', { bubbles: true }));
     }
-
+    
+    setupImageDropZone(inputId, editorId) {
+        const fileInput = document.getElementById(inputId);
+        const editor = document.getElementById(editorId);
+        
+        if (!fileInput || !editor) return;
+        
+        // Find the drop zone (parent of file input)
+        const dropZone = fileInput.closest('.image-drop-zone');
+        if (!dropZone) return;
+        
+        // Click to select file
+        dropZone.addEventListener('click', () => {
+            fileInput.click();
+        });
+        
+        // File input change
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files[0]) {
+                this.handleImageUpload(e.target.files[0], editor);
+            }
+        });
+        
+        // Drag and drop events
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        });
+        
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            // Only remove if we're leaving the drop zone itself, not a child
+            if (!dropZone.contains(e.relatedTarget)) {
+                dropZone.classList.remove('drag-over');
+            }
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            
+            const files = e.dataTransfer.files;
+            if (files && files[0]) {
+                this.handleImageUpload(files[0], editor);
+            }
+        });
+    }
+    
+    openImagePicker(targetEditor) {
+        // Create a temporary file input
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'image/*';
+        fileInput.style.display = 'none';
+        
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files[0]) {
+                this.handleImageUpload(e.target.files[0], targetEditor);
+            }
+            // Clean up
+            document.body.removeChild(fileInput);
+        });
+        
+        // Add to DOM and trigger click
+        document.body.appendChild(fileInput);
+        fileInput.click();
+    }
+    
     async saveTaskChanges(task, options = { closeAfterSave: true }) {
+        console.log('💾 saveTaskChanges called for task:', task?.id, 'options:', options);
+        
         // Collect all form data
         const taskNameInput = document.getElementById('taskNameInput');
         const descriptionEditor = document.getElementById('taskDescriptionEditor');
@@ -2161,12 +3484,54 @@ class ProjectBoard {
         const taskPriority = document.getElementById('taskPriority');
         const activeTypeBtn = document.querySelector('.type-btn.active');
         
-        // Update task object with full content
-        task.title = taskNameInput.value;
-        task.content = descriptionEditor.value; // Short content for display
-        task.fullContent = descriptionEditor.value; // Full content for file saving
-        task.developer = taskAssignee.value;
-        task.assignee = taskAssignee.options[taskAssignee.selectedIndex].text;
+        // Update form fields if form elements exist AND are visible (modal is open)
+        const formElementsExist = taskNameInput && descriptionEditor;
+        const taskDetailModal = document.getElementById('taskDetailModal');
+        const modalIsOpen = taskDetailModal && 
+                           taskDetailModal.style.display === 'flex';
+        
+        console.log('📝 saveTaskChanges modal state check:', {
+            formElementsExist,
+            modalExists: !!taskDetailModal,
+            modalDisplay: taskDetailModal?.style.display,
+            modalIsOpen,
+            taskId: task?.id
+        });
+        
+        // Only update task content from form if modal is actually open
+        if (formElementsExist && modalIsOpen) {
+            console.log('📝 Modal is open, updating task from form elements');
+            // Update task object with form content
+            if (taskNameInput.value !== undefined && taskNameInput.value !== null) {
+                task.title = taskNameInput.value;
+            }
+            if (descriptionEditor.value !== undefined && descriptionEditor.value !== null) {
+                // Extract pure markdown content without YAML frontmatter
+                const pureMarkdown = this.extractMarkdownContent(descriptionEditor.value);
+                task.content = pureMarkdown; // Short content for display
+                task.fullContent = pureMarkdown; // Pure markdown for file saving
+                console.log('📝 Extracted pure markdown, length:', pureMarkdown.length, 'original:', descriptionEditor.value.length);
+            }
+        } else if (formElementsExist && !modalIsOpen) {
+            console.log('📝 Modal is closed, preserving existing task content during drag-and-drop');
+        }
+        
+        // Only update other form fields if modal is open
+        if (formElementsExist && modalIsOpen) {
+            if (taskAssignee && taskAssignee.value !== undefined) {
+                task.developer = taskAssignee.value;
+                if (taskAssignee.selectedIndex >= 0) {
+                    task.assignee = taskAssignee.options[taskAssignee.selectedIndex].text;
+                }
+            }
+            
+            console.log(`📝 Updated task content for ${task.id}:`, {
+                title: task.title,
+                contentLength: task.content ? task.content.length : 0,
+                developer: task.developer
+            });
+        }
+        // If modal is not open (e.g., drag & drop), preserve existing task data
         // Normalize time values
         const normalizeTime = (value) => {
             if (!value || value === '' || value === '0') return '0h';
@@ -2175,32 +3540,55 @@ class ProjectBoard {
             return `${value}h`;
         };
         
-        console.log(`📊 saveTaskChanges: Reading form values for task ${task.id}:`);
-        console.log(`  taskEstimate.value: "${taskEstimate.value}"`);
-        console.log(`  taskTimeSpent.value: "${taskTimeSpent.value}"`);
-        
-        task.timeEstimate = normalizeTime(taskEstimate.value);
-        task.timeSpent = normalizeTime(taskTimeSpent.value);
-        
-        console.log(`  After normalization:`);
-        console.log(`  task.timeEstimate: "${task.timeEstimate}"`);
-        console.log(`  task.timeSpent: "${task.timeSpent}"`);
-        
-        // Also sync with estimateInput if it exists (from time tracking section)
-        const estimateInput = document.getElementById('estimateInput');
-        if (estimateInput && estimateInput.value) {
-            const estimateInputValue = normalizeTime(estimateInput.value);
-            console.log(`🔄 Syncing estimate: taskEstimate="${task.timeEstimate}" estimateInput="${estimateInputValue}"`);
-            task.timeEstimate = estimateInputValue; // Use normalized value from estimateInput
+        if (formElementsExist && modalIsOpen && taskEstimate && taskTimeSpent) {
+            console.log(`📊 saveTaskChanges: Task values BEFORE reading form fields:`);
+            console.log(`  task.timeEstimate: "${task.timeEstimate}"`);
+            console.log(`  task.timeSpent: "${task.timeSpent}"`);
+            console.log(`📊 saveTaskChanges: Reading form values for task ${task.id}:`);
+            console.log(`  taskEstimate.value: "${taskEstimate.value}"`);
+            console.log(`  taskTimeSpent.value: "${taskTimeSpent.value}"`);
+            
+            task.timeEstimate = normalizeTime(taskEstimate.value);
+            task.timeSpent = normalizeTime(taskTimeSpent.value);
+            
+            console.log(`  After normalization:`);
+            console.log(`  task.timeEstimate: "${task.timeEstimate}"`);
+            console.log(`  task.timeSpent: "${task.timeSpent}"`);
+            
+            // Also sync with estimateInput if it exists (from time tracking section)
+            const estimateInput = document.getElementById('estimateInput');
+            if (estimateInput && estimateInput.value) {
+                const estimateInputValue = normalizeTime(estimateInput.value);
+                console.log(`🔄 Syncing estimate: taskEstimate="${task.timeEstimate}" estimateInput="${estimateInputValue}"`);
+                task.timeEstimate = estimateInputValue; // Use normalized value from estimateInput
+            }
+            
+            console.log(`📊 Final task values before file save:`);
+            console.log(`  task.timeEstimate: "${task.timeEstimate}"`);
+            console.log(`  task.timeSpent: "${task.timeSpent}"`);
+            
+            const taskPrioritySelect = document.getElementById('taskPrioritySelect');
+            task.priority = (taskPrioritySelect && taskPrioritySelect.value) || (taskPriority && taskPriority.value) || 'low';
+        } else {
+            console.log(`📊 saveTaskChanges: Form elements not available, preserving existing task data for ${task.id}`);
         }
         
-        console.log(`📊 Final task values before file save:`);
-        console.log(`  task.timeEstimate: "${task.timeEstimate}"`);
-        console.log(`  task.timeSpent: "${task.timeSpent}"`);
-        
-        const taskPrioritySelect = document.getElementById('taskPrioritySelect');
-        task.priority = (taskPrioritySelect && taskPrioritySelect.value) || (taskPriority && taskPriority.value) || 'low';
-        task.type = activeTypeBtn ? activeTypeBtn.dataset.type : 'task';
+        // Save status and type from dropdown if form elements exist AND modal is open
+        if (formElementsExist && modalIsOpen) {
+            const taskStatusSelect = document.getElementById('taskStatusSelect');
+            if (taskStatusSelect && taskStatusSelect.value) {
+                // Only update status if it wasn't already updated by event handler
+                if (!task.status || task.status !== taskStatusSelect.value) {
+                    task.status = taskStatusSelect.value;
+                    task.column = taskStatusSelect.value; // Keep column in sync with status
+                }
+            }
+            
+            // Update type from active button
+            if (activeTypeBtn) {
+                task.type = activeTypeBtn.dataset.type;
+            }
+        }
         
         // Add change author information for server logging
         task.changeAuthor = 'User'; // В реальному додатку тут має бути ім'я поточного користувача
@@ -2264,14 +3652,37 @@ class ProjectBoard {
                 await window.globalDataManager.updateTask(this.currentProject.id, task);
                 console.log('✅ Task saved via globalDataManager.updateTask');
             } else {
-                // 3) Fallback to localStorage cache (guaranteed)
-                const key = `fira:tasks:${this.currentProject ? this.currentProject.id : 'default'}`;
-                const payload = {
-                    tasks: this.tasks,
-                    savedAt: new Date().toISOString()
-                };
-                localStorage.setItem(key, JSON.stringify(payload));
-                console.warn('Task persisted to localStorage fallback:', key);
+                // 3) Try direct API call to server
+                try {
+                    console.log('💾 Trying direct API save for task:', task.id);
+                    const response = await fetch(`/api/projects/${encodeURIComponent(this.currentProject.id)}/tasks/${encodeURIComponent(task.id)}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            ...task,
+                            lastModified: new Date().toISOString()
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        console.log('✅ Task saved via direct API call');
+                    } else {
+                        throw new Error(`API returned ${response.status}: ${response.statusText}`);
+                    }
+                } catch (apiError) {
+                    console.warn('⚠️ Direct API save failed:', apiError.message);
+                    
+                    // 4) Final fallback to localStorage cache (guaranteed)
+                    const key = `fira:tasks:${this.currentProject ? this.currentProject.id : 'default'}`;
+                    const payload = {
+                        tasks: this.tasks,
+                        savedAt: new Date().toISOString()
+                    };
+                    localStorage.setItem(key, JSON.stringify(payload));
+                    console.warn('Task persisted to localStorage fallback:', key);
+                }
             }
         } catch (error) {
             console.error('Failed to persist task:', error);
@@ -2313,13 +3724,19 @@ class ProjectBoard {
         this.tasks = this.deduplicateTasks(this.tasks);
         this.checkForDuplicates('after saveTaskUpdates deduplication');
         
-        // Re-render the board to reflect changes
-        console.log(`🎨 About to re-render board after task update`);
-        this.checkForDuplicates('before final render in saveTaskUpdates'); 
-        this.filterAndRenderTasks();
+        // Re-render the board to reflect changes (unless caller disabled it)
+        if (!options.skipRerender) {
+            console.log(`🎨 About to re-render board after task update`);
+            this.checkForDuplicates('before final render in saveTaskUpdates'); 
+            this.filterAndRenderTasks();
+        } else {
+            console.log(`🎨 Skipping board re-render as requested by caller`);
+        }
         
-        // Show success message
-        this.showMessage('Task updated successfully', 'success');
+        // Show success message (unless caller disabled it)
+        if (!options.skipSuccessMessage) {
+            this.showMessage('Task updated successfully', 'success');
+        }
 
         // Close modal only if caller requested it
         if (options && options.closeAfterSave) {
@@ -2367,9 +3784,85 @@ class ProjectBoard {
         // Removed pagination - now using infinite scroll
     }
 
-    setupTimeTrackingClickHandler() {
-        // Use event delegation to handle clicks on time tracking sections
+    setupColumnSortEventListeners() {
+        // Column header sorting for kanban view
         document.addEventListener('click', (e) => {
+            const columnHeader = e.target.closest('.figma-column-header');
+            if (columnHeader) {
+                const columnName = columnHeader.getAttribute('data-column-name');
+                this.handleColumnSort(columnName);
+            }
+        });
+    }
+
+    handleColumnSort(columnName) {
+        console.log('🔄 Column sort clicked:', columnName);
+
+        // Get all column headers
+        const headers = document.querySelectorAll('.figma-column-header');
+
+        // Find the clicked header
+        const clickedHeader = document.querySelector(`[data-column-name="${columnName}"]`);
+        if (!clickedHeader) return;
+
+        // Determine sort direction
+        let sortDirection = 'asc';
+        const currentSort = this.columnSortStates[columnName];
+        if (currentSort && currentSort.direction === 'asc') {
+            sortDirection = 'desc';
+        }
+
+        // Clear all other headers' sort states
+        headers.forEach(header => {
+            header.removeAttribute('data-sort');
+        });
+
+        // Clear all other column sort states
+        this.columnSortStates = {};
+
+        // Set the sort direction on clicked header and in state
+        clickedHeader.setAttribute('data-sort', sortDirection);
+        this.columnSortStates[columnName] = { direction: sortDirection };
+
+        // Re-render the board to apply sorting
+        this.renderBoard();
+
+        console.log(`✅ Column ${columnName} sorted ${sortDirection}`);
+    }
+
+    sortTasksByTitle(tasks, direction) {
+        return tasks.sort((a, b) => {
+            const titleA = (a.title || '').trim();
+            const titleB = (b.title || '').trim();
+
+            if (direction === 'asc') {
+                return titleA.localeCompare(titleB);
+            } else {
+                return titleB.localeCompare(titleA);
+            }
+        });
+    }
+
+    restoreColumnSortIndicators() {
+        // Restore visual indicators for sorted columns after re-render
+        Object.keys(this.columnSortStates).forEach(columnName => {
+            const sortState = this.columnSortStates[columnName];
+            const header = document.querySelector(`[data-column-name="${columnName}"]`);
+            if (header && sortState) {
+                header.setAttribute('data-sort', sortState.direction);
+                console.log(`🔄 Restored ${sortState.direction} indicator for ${columnName}`);
+            }
+        });
+    }
+
+    setupTimeTrackingClickHandler() {
+        // Remove any existing time tracking click handler to prevent duplicates
+        if (this.timeTrackingClickHandler) {
+            document.removeEventListener('click', this.timeTrackingClickHandler);
+        }
+        
+        // Create the click handler function
+        this.timeTrackingClickHandler = (e) => {
             const timeTrackingSection = e.target.closest('.time-tracking-section');
             if (timeTrackingSection) {
                 e.preventDefault();
@@ -2377,9 +3870,8 @@ class ProjectBoard {
                 
                 console.log('Time tracking section clicked');
                 
-                // Find the current task being edited
-                const taskModal = e.target.closest('#taskDetailModal');
-                if (taskModal && this.currentTask) {
+                // Check if we have a current task (either in edit mode or create mode)
+                if (this.currentTask) {
                     console.log('Opening time tracking modal for task:', this.currentTask);
                     
                     // Get fresh task data from form inputs to include any changes
@@ -2462,7 +3954,7 @@ class ProjectBoard {
                         timeModal.style.display = 'flex';
                         console.log('Time tracking modal opened');
                         
-                        // Initialize time tracking manager if needed
+                        // Initialize time tracking manager if needed (singleton pattern)
                         if (!window.timeTrackingManager) {
                             window.timeTrackingManager = new TimeTrackingManager();
                         }
@@ -2471,12 +3963,14 @@ class ProjectBoard {
                         console.error('timeTrackingModal element not found');
                     }
                 } else {
-                    console.error('Task modal or currentTask not found');
-                    console.log('taskModal:', taskModal);
+                    console.error('No current task found');
                     console.log('this.currentTask:', this.currentTask);
                 }
             }
-        });
+        };
+        
+        // Add the event listener with our stored function reference
+        document.addEventListener('click', this.timeTrackingClickHandler);
     }
 
     renderListView() {
@@ -2830,20 +4324,57 @@ class ProjectBoard {
         }
     }
 
+    extractMarkdownContent(content) {
+        // Extract pure markdown content without YAML frontmatter
+        if (!content) return '';
+        
+        if (content.startsWith('---')) {
+            const parts = content.split('---', 3);
+            if (parts.length >= 3) {
+                const markdown = parts[2] || '';
+                console.log('🔍 Extracted markdown from YAML content, length:', markdown.length);
+                return markdown.trim(); // Remove leading/trailing whitespace
+            }
+        }
+        
+        // No YAML frontmatter found, return original content
+        console.log('🔍 No YAML frontmatter found, using original content');
+        return content;
+    }
+
     convertMarkdownToHTML(markdown) {
+        // Remove YAML frontmatter block
+        let cleanMarkdown = markdown;
+        if (markdown.startsWith('---')) {
+            const endIndex = markdown.indexOf('\n---\n', 3);
+            if (endIndex !== -1) {
+                cleanMarkdown = markdown.substring(endIndex + 5);
+            }
+        }
+
         // Simple markdown to HTML converter for basic formatting
-        let html = markdown
+        let html = cleanMarkdown
             // Headers
             .replace(/^### (.+)$/gm, '<h4>$1</h4>')
             .replace(/^## (.+)$/gm, '<h3>$1</h3>')
             .replace(/^# (.+)$/gm, '<h2>$1</h2>')
+            // Images - must be processed before links
+            .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width: 100%; height: auto; margin: 8px 0; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">')
+            // Links
+            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" style="color: #8b5cf6; text-decoration: none;">$1</a>')
             // Bold
             .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            // Italic  
+            .replace(/\*(.+?)\*/g, '<em>$1</em>')
+            // Code
+            .replace(/`([^`]+)`/g, '<code style="background: #f3f4f6; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 0.9em;">$1</code>')
+            // Quotes
+            .replace(/^> (.+)$/gm, '<blockquote style="border-left: 4px solid #8b5cf6; margin: 8px 0; padding: 8px 16px; background: #f8fafc; font-style: italic; color: #475569;">$1</blockquote>')
             // Lists
             .replace(/^- \[ \] (.+)$/gm, '<div style="margin: 4px 0;"><input type="checkbox" disabled style="margin-right: 8px;">$1</div>')
             .replace(/^- \[x\] (.+)$/gm, '<div style="margin: 4px 0;"><input type="checkbox" checked disabled style="margin-right: 8px;">$1</div>')
             .replace(/^- (.+)$/gm, '<div style="margin: 4px 0; margin-left: 16px;">• $1</div>')
-            // Links
+            // Internal links (wiki-style)
             .replace(/\[\[([^\]]+)\]\]/g, '<span style="background: #e5e7eb; padding: 2px 6px; border-radius: 4px; font-size: 12px;">$1</span>')
             // Line breaks
             .replace(/\n\n/g, '<br><br>')
@@ -2853,18 +4384,67 @@ class ProjectBoard {
     }
 
 
-    openEditProjectModal() {
+    async openEditProjectModal() {
         if (!this.currentProject) {
             this.showMessage('No project selected', 'error');
             return;
         }
 
-        // Get full project data from global data manager
-        let projectData = this.currentProject;
-        if (window.globalDataManager) {
+        // Get full project data from available sources
+        let projectData = { ...this.currentProject };
+        
+        // First, try to get from global data manager
+        if (window.globalDataManager && window.globalDataManager.getProjects) {
             const fullProject = window.globalDataManager.getProjects().find(p => p.id === this.currentProject.id);
             if (fullProject) {
-                projectData = fullProject;
+                projectData = { ...projectData, ...fullProject };
+                console.log('✅ Found project in globalDataManager:', projectData);
+            }
+        }
+        
+        // Try to load fresh project data from server if available and description is missing/invalid
+        if ((!projectData.description || projectData.description === projectData.id) && 
+            window.globalDataManager && 
+            window.globalDataManager.apiClient && 
+            window.globalDataManager.loadingMode === 'server') {
+            try {
+                console.log('🔄 Loading fresh project data from server...');
+                const serverProjects = await window.globalDataManager.apiClient.getProjects();
+                const serverProject = serverProjects.find(p => p.id === this.currentProject.id);
+                if (serverProject && serverProject.description && serverProject.description !== serverProject.id) {
+                    projectData = { ...projectData, ...serverProject };
+                    // Also update the current project in memory
+                    this.currentProject = { ...this.currentProject, description: serverProject.description };
+                    console.log('✅ Loaded and updated fresh project data from server:', serverProject);
+                }
+            } catch (error) {
+                console.warn('⚠️ Failed to load fresh project data from server:', error);
+            }
+        }
+        
+        // Fallback to static PROJECTS_DATA if description is still missing/invalid
+        if ((!projectData.description || projectData.description === projectData.id) && window.PROJECTS_DATA) {
+            const staticProject = window.PROJECTS_DATA.find(p => p.id === this.currentProject.id);
+            if (staticProject && staticProject.description && staticProject.description !== staticProject.id) {
+                projectData = { ...projectData, ...staticProject };
+                console.log('✅ Enhanced project data with static data:', staticProject);
+            }
+        }
+        
+        // If still no valid description, set empty string to avoid showing project ID
+        if (!projectData.description || projectData.description === projectData.id) {
+            projectData.description = '';
+            console.log('⚠️ Set empty description to avoid showing project ID');
+        }
+        
+        // Ensure name is not the project ID
+        if (!projectData.name || projectData.name === projectData.id) {
+            if (window.PROJECTS_DATA) {
+                const staticProject = window.PROJECTS_DATA.find(p => p.id === this.currentProject.id);
+                if (staticProject && staticProject.name) {
+                    projectData.name = staticProject.name;
+                    console.log('✅ Fixed project name from static data:', projectData.name);
+                }
             }
         }
 
@@ -2890,6 +4470,235 @@ class ProjectBoard {
             nameInput.focus();
             nameInput.select();
         }, 100);
+    }
+
+    openAddDeveloperModal() {
+        const modal = document.getElementById('addDeveloperModal');
+        const nameInput = document.getElementById('developerName');
+        
+        if (!modal || !nameInput) {
+            console.error('Add developer modal elements not found');
+            return;
+        }
+
+        // Clear previous input
+        nameInput.value = '';
+        
+        // Setup form handlers
+        this.setupAddDeveloperFormHandlers();
+        
+        // Show modal
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+        
+        // Focus on name input
+        setTimeout(() => {
+            nameInput.focus();
+        }, 100);
+    }
+
+    setupAddDeveloperFormHandlers() {
+        const form = document.getElementById('addDeveloperForm');
+        
+        if (!form) {
+            console.error('Add developer form not found');
+            return;
+        }
+        
+        // Remove existing listeners by replacing the form with a clone
+        const newForm = form.cloneNode(true);
+        form.parentNode.replaceChild(newForm, form);
+        
+        // Add fresh form submission handler
+        newForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await this.handleAddDeveloper();
+        });
+    }
+
+    async handleAddDeveloper() {
+        // Prevent multiple concurrent calls
+        if (this.isAddingDeveloper) {
+            console.log('🔄 Developer addition already in progress, ignoring duplicate call');
+            return;
+        }
+        
+        this.isAddingDeveloper = true;
+        
+        const nameInput = document.getElementById('developerName');
+        const errorElement = document.getElementById('developerNameError');
+        const saveBtn = document.getElementById('addDeveloperSaveBtn');
+        
+        // Disable the save button to prevent multiple clicks
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            const btnText = saveBtn.querySelector('.btn-text');
+            const btnLoading = saveBtn.querySelector('.btn-loading');
+            if (btnText) btnText.style.display = 'none';
+            if (btnLoading) btnLoading.style.display = 'flex';
+        }
+        
+        const developerName = nameInput.value.trim();
+        
+        // Validate input
+        if (!developerName) {
+            errorElement.textContent = 'Developer name is required';
+            nameInput.focus();
+            this.isAddingDeveloper = false;
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                const btnText = saveBtn.querySelector('.btn-text');
+                const btnLoading = saveBtn.querySelector('.btn-loading');
+                if (btnText) btnText.style.display = 'inline';
+                if (btnLoading) btnLoading.style.display = 'none';
+            }
+            return;
+        }
+        
+        if (developerName.length < 2) {
+            errorElement.textContent = 'Developer name must be at least 2 characters';
+            nameInput.focus();
+            this.isAddingDeveloper = false;
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                const btnText = saveBtn.querySelector('.btn-text');
+                const btnLoading = saveBtn.querySelector('.btn-loading');
+                if (btnText) btnText.style.display = 'inline';
+                if (btnLoading) btnLoading.style.display = 'none';
+            }
+            return;
+        }
+        
+        // Clear error
+        errorElement.textContent = '';
+        
+        try {
+            
+            // Create developer ID from name (lowercase, spaces to hyphens)
+            const developerId = 'dev-' + developerName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+            
+            // Check if developer already exists
+            if (this.isDeveloperExists(developerId)) {
+                errorElement.textContent = 'A developer with this name already exists';
+                nameInput.focus();
+                this.isAddingDeveloper = false;
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    const btnText = saveBtn.querySelector('.btn-text');
+                    const btnLoading = saveBtn.querySelector('.btn-loading');
+                    if (btnText) btnText.style.display = 'inline';
+                    if (btnLoading) btnLoading.style.display = 'none';
+                }
+                return;
+            }
+            
+            // Add developer to project
+            await this.addDeveloperToProject(developerId, developerName);
+
+            // Add developer to local state immediately to ensure it appears in dropdowns
+            this.addDeveloperLocally(developerId, developerName);
+
+            // Instead of full refresh, just clear the developers cache so the dropdown will be updated
+            if (window.globalDataManager) {
+                // Clear only the developers cache for this project
+                if (window.globalDataManager.projectDevelopers && window.globalDataManager.projectDevelopers[this.currentProject.id]) {
+                    delete window.globalDataManager.projectDevelopers[this.currentProject.id];
+                    console.log('🗑️ Cleared developers cache for project:', this.currentProject.id);
+                }
+            }
+
+            // Update developer dropdown (used for filtering)
+            this.updateDeveloperDropdown();
+
+            // Update assignee dropdown for task assignment (force refresh to get latest)
+            await this.updateAssigneeDropdown('Unassigned', true);
+
+            // Close modal
+            this.closeAddDeveloperModal();
+            
+            // Show success message
+            this.showMessage(`Developer "${developerName}" added successfully!`, 'success');
+            
+        } catch (error) {
+            console.error('Error adding developer:', error);
+            errorElement.textContent = 'Failed to add developer. Please try again.';
+        } finally {
+            // Reset the flag and restore button state
+            this.isAddingDeveloper = false;
+            
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                const btnText = saveBtn.querySelector('.btn-text');
+                const btnLoading = saveBtn.querySelector('.btn-loading');
+                if (btnText) btnText.style.display = 'inline';
+                if (btnLoading) btnLoading.style.display = 'none';
+            }
+        }
+    }
+
+    isDeveloperExists(developerId) {
+        // Check in current task developers
+        const developers = new Set();
+        this.tasks.forEach(task => {
+            if (task.developer) developers.add(task.developer);
+            if (task.assignee) developers.add(task.assignee);
+        });
+        
+        return developers.has(developerId);
+    }
+
+    async addDeveloperToProject(developerId, developerName) {
+        // Create a basic task structure in the new developer's folder
+        // This ensures the developer appears in the project structure
+        
+        if (window.globalDataManager) {
+            try {
+                // Try to use global data manager to create developer folder
+                await window.globalDataManager.addDeveloperToProject(this.currentProject.id, developerId, developerName);
+            } catch (error) {
+                console.warn('Could not use globalDataManager, adding developer locally:', error);
+                // Fallback: just add to local state
+                this.addDeveloperLocally(developerId, developerName);
+            }
+        } else {
+            // Fallback: add to local state
+            this.addDeveloperLocally(developerId, developerName);
+        }
+    }
+
+    addDeveloperLocally(developerId, developerName) {
+        // Add developer info to a local developers list if needed
+        // This is a fallback for when filesystem operations aren't available
+
+        // Add to current project's developers array
+        if (this.currentProject) {
+            if (!this.currentProject.developers) {
+                this.currentProject.developers = [];
+            }
+            if (!this.currentProject.developers.includes(developerId)) {
+                this.currentProject.developers.push(developerId);
+                console.log(`Added developer locally: ${developerName} (${developerId})`);
+            }
+        }
+
+        // Also add to globalDataManager cache if available
+        if (window.globalDataManager && window.globalDataManager.projectDevelopers && this.currentProject) {
+            const projectId = this.currentProject.id;
+            if (!window.globalDataManager.projectDevelopers[projectId]) {
+                window.globalDataManager.projectDevelopers[projectId] = [];
+            }
+            if (!window.globalDataManager.projectDevelopers[projectId].includes(developerId)) {
+                window.globalDataManager.projectDevelopers[projectId].push(developerId);
+            }
+        }
+    }
+
+    closeAddDeveloperModal() {
+        const modal = document.getElementById('addDeveloperModal');
+        if (modal) {
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
     }
 
     setupEditProjectFormHandlers() {
@@ -2947,25 +4756,45 @@ class ProjectBoard {
             btnLoading.style.display = 'flex';
             
             // Update project using global data manager if available
-            if (window.globalDataManager && typeof window.globalDataManager.updateProject === 'function') {
-                console.log('✅ Using existing globalDataManager.updateProject');
+            if (window.globalDataManager) {
+                console.log('✅ Using globalDataManager to save project');
                 console.log('📊 Loading mode:', window.globalDataManager.loadingMode);
                 console.log('📁 Directory handle:', !!window.globalDataManager.directoryHandle);
-                await window.globalDataManager.updateProject(this.currentProject.id, updatedData);
-                console.log('✅ globalDataManager.updateProject completed successfully');
+                
+                // Direct call to saveProjectToFileSystem to ensure README.md is updated
+                if ((window.globalDataManager.loadingMode === 'directory-picker' || window.globalDataManager.loadingMode === 'directory-refreshed') && window.globalDataManager.directoryHandle) {
+                    console.log('💾 Saving directly to README.md file...');
+                    await window.globalDataManager.saveProjectToFileSystem(this.currentProject.id, updatedData);
+                    console.log('✅ Project saved to README.md successfully');
+                } else if (typeof window.globalDataManager.updateProject === 'function') {
+                    console.log('🌐 Using updateProject method...');
+                    await window.globalDataManager.updateProject(this.currentProject.id, updatedData);
+                    console.log('✅ globalDataManager.updateProject completed successfully');
+                } else {
+                    console.log('📦 Updating local data only...');
+                    const projectIndex = window.globalDataManager.projects.findIndex(p => p.id === this.currentProject.id);
+                    if (projectIndex !== -1) {
+                        window.globalDataManager.projects[projectIndex] = { ...window.globalDataManager.projects[projectIndex], ...updatedData };
+                        console.log('✅ Project updated in local cache');
+                    }
+                }
             } else if (window.GlobalDataManager && !window.globalDataManager) {
-                // Initialize globalDataManager if not already done
                 console.log('🔄 Initializing globalDataManager for project update');
                 window.globalDataManager = new GlobalDataManager();
                 await window.globalDataManager.initialize();
                 console.log('✅ globalDataManager initialized, loading mode:', window.globalDataManager.loadingMode);
-                if (typeof window.globalDataManager.updateProject === 'function') {
-                    console.log('✅ Calling updateProject after initialization');
-                    await window.globalDataManager.updateProject(this.currentProject.id, updatedData);
-                    console.log('✅ updateProject completed successfully after initialization');
+                
+                if ((window.globalDataManager.loadingMode === 'directory-picker' || window.globalDataManager.loadingMode === 'directory-refreshed') && window.globalDataManager.directoryHandle) {
+                    console.log('💾 Saving to README.md after initialization...');
+                    await window.globalDataManager.saveProjectToFileSystem(this.currentProject.id, updatedData);
+                    console.log('✅ Project saved to README.md successfully');
                 } else {
-                    console.warn('⚠️ updateProject method still not available after initialization');
-                    throw new Error('updateProject method not available after initialization');
+                    console.log('📦 Updating local data only after initialization...');
+                    const projectIndex = window.globalDataManager.projects.findIndex(p => p.id === this.currentProject.id);
+                    if (projectIndex !== -1) {
+                        window.globalDataManager.projects[projectIndex] = { ...window.globalDataManager.projects[projectIndex], ...updatedData };
+                        console.log('✅ Project updated in local cache');
+                    }
                 }
             } else {
                 console.warn('⚠️ globalDataManager not available for project update');
@@ -3233,8 +5062,61 @@ class ProjectBoard {
             this.currentProject.name = updatedData.name;
             this.currentProject.description = updatedData.description;
             
-            // Update page title
-            document.getElementById('projectName').textContent = updatedData.name;
+            // Also update in globalDataManager projects array for consistency
+            if (window.globalDataManager && window.globalDataManager.projects) {
+                const projectIndex = window.globalDataManager.projects.findIndex(p => p.id === this.currentProject.id);
+                if (projectIndex !== -1) {
+                    window.globalDataManager.projects[projectIndex] = { ...window.globalDataManager.projects[projectIndex], ...updatedData };
+                    console.log('✅ Updated project in globalDataManager.projects array');
+                }
+            }
+            
+            // Update static PROJECTS_DATA for consistency
+            if (window.PROJECTS_DATA) {
+                const staticProjectIndex = window.PROJECTS_DATA.findIndex(p => p.id === this.currentProject.id);
+                if (staticProjectIndex !== -1) {
+                    window.PROJECTS_DATA[staticProjectIndex] = { ...window.PROJECTS_DATA[staticProjectIndex], ...updatedData };
+                    console.log('✅ Updated project in PROJECTS_DATA');
+                } else {
+                    // Add new project to static data if not found
+                    window.PROJECTS_DATA.push({
+                        id: this.currentProject.id,
+                        name: updatedData.name,
+                        description: updatedData.description,
+                        tasksCount: { backlog: 0, progress: 0, review: 0, testing: 0, done: 0 },
+                        totalTasks: 0,
+                        lastModified: new Date().toISOString(),
+                        developers: []
+                    });
+                    console.log('✅ Added new project to PROJECTS_DATA');
+                }
+            }
+            
+            // Update dashboard data if available
+            if (window.projectsData) {
+                const dashboardProjectIndex = window.projectsData.findIndex(p => p.id === this.currentProject.id);
+                if (dashboardProjectIndex !== -1) {
+                    window.projectsData[dashboardProjectIndex] = { ...window.projectsData[dashboardProjectIndex], ...updatedData };
+                    console.log('✅ Updated project in dashboard projectsData');
+                    
+                    // Also update filtered projects
+                    if (window.filteredProjects) {
+                        const filteredProjectIndex = window.filteredProjects.findIndex(p => p.id === this.currentProject.id);
+                        if (filteredProjectIndex !== -1) {
+                            window.filteredProjects[filteredProjectIndex] = { ...window.filteredProjects[filteredProjectIndex], ...updatedData };
+                            console.log('✅ Updated project in dashboard filteredProjects');
+                        }
+                    }
+                }
+            }
+            
+            // Update page title while preserving Info button
+            const projectNameElement = document.getElementById('projectName');
+            const infoButton = projectNameElement.querySelector('button');
+            projectNameElement.textContent = updatedData.name;
+            if (infoButton) {
+                projectNameElement.appendChild(infoButton);
+            }
             
             // Close modal
             closeEditProjectModal();
@@ -3278,34 +5160,100 @@ class ProjectBoard {
         
         // Update developer statistics
         this.updateDeveloperStats();
+        
+        // Setup chart toggle buttons
+        this.setupChartToggleButtons();
     }
     
     updateAnalyticsMetrics() {
-        const totalTasks = this.tasks.length;
-        const completedTasks = this.tasks.filter(task => task.column === 'done').length;
-        const inProgressTasks = this.tasks.filter(task => task.column === 'progress').length;
-        const blockedTasks = this.tasks.filter(task => task.column === 'review' || task.column === 'testing').length;
+        // Debug: show current project and tasks info
+        console.log('🔍 ANALYTICS DEBUG:', {
+            currentProject: this.currentProject?.id,
+            totalTasksInArray: this.tasks.length,
+            totalFilteredTasks: this.filteredTasks?.length || 0,
+            usingFilteredTasks: this.filteredTasks && this.filteredTasks.length > 0,
+            firstFewTasks: this.tasks.slice(0, 3).map(t => ({id: t.id, column: t.column, project: t.projectId})),
+            firstFewFiltered: this.filteredTasks?.slice(0, 3).map(t => ({id: t.id, column: t.column, project: t.projectId})) || []
+        });
+        
+        // Use filteredTasks if available, otherwise use all tasks
+        const tasksToAnalyze = this.filteredTasks && this.filteredTasks.length > 0 ? this.filteredTasks : this.tasks;
+        
+        const totalTasks = tasksToAnalyze.length;
+        const backlogTasks = tasksToAnalyze.filter(task => task.column === 'backlog').length;
+        const inProgressTasks = tasksToAnalyze.filter(task => task.column === 'progress').length;
+        const reviewTasks = tasksToAnalyze.filter(task => task.column === 'review').length;
+        const testingTasks = tasksToAnalyze.filter(task => task.column === 'testing').length;
+        const completedTasks = tasksToAnalyze.filter(task => task.column === 'done').length;
+        
+        // Debug: show column breakdown
+        console.log('📊 COLUMN BREAKDOWN:', {
+            totalTasks,
+            backlogTasks,
+            inProgressTasks,
+            reviewTasks,
+            testingTasks,
+            completedTasks,
+            sum: backlogTasks + inProgressTasks + reviewTasks + testingTasks + completedTasks
+        });
         
         // Calculate completion rate
         const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
         
         // Calculate total time spent and estimated
-        const totalSpent = this.tasks.reduce((sum, task) => sum + this.parseTime(task.timeSpent || '0h'), 0);
-        const totalEstimated = this.tasks.reduce((sum, task) => sum + this.parseTime(task.timeEstimate || '0h'), 0);
+        const totalSpent = tasksToAnalyze.reduce((sum, task) => sum + this.parseTime(task.timeSpent || '0h'), 0);
+        const totalEstimated = tasksToAnalyze.reduce((sum, task) => sum + this.parseTime(task.timeEstimate || '0h'), 0);
         
-        // Update DOM elements
-        document.getElementById('totalTasksMetric').textContent = totalTasks;
-        document.getElementById('completedTasksMetric').textContent = completedTasks;
-        document.getElementById('inProgressTasksMetric').textContent = inProgressTasks;
-        document.getElementById('blockedTasksMetric').textContent = blockedTasks;
-        document.getElementById('completionRateMetric').textContent = `${completionRate}%`;
-        document.getElementById('totalTimeSpentMetric').textContent = this.formatTime(totalSpent);
-        document.getElementById('totalTimeEstimatedMetric').textContent = this.formatTime(totalEstimated);
+        // Calculate velocity (tasks completed per week) - simple mock calculation
+        const velocity = Math.round(completedTasks / Math.max(1, Math.ceil(totalTasks / 10))); // Rough estimate
+        
+        // Update DOM elements with correct IDs
+        const projectBacklogCount = document.getElementById('projectBacklogCount');
+        const projectProgressCount = document.getElementById('projectProgressCount');
+        const projectDoneCount = document.getElementById('projectDoneCount');
+        const projectVelocityValue = document.getElementById('projectVelocityValue');
+        const projectTotalPlanned = document.getElementById('projectTotalPlanned');
+        const projectTotalSpent = document.getElementById('projectTotalSpent');
+        const projectEfficiency = document.getElementById('projectEfficiency');
+        
+        if (projectBacklogCount) projectBacklogCount.textContent = backlogTasks;
+        if (projectProgressCount) projectProgressCount.textContent = inProgressTasks;
+        if (projectDoneCount) projectDoneCount.textContent = completedTasks;
+        if (projectVelocityValue) projectVelocityValue.textContent = velocity;
+        if (projectTotalPlanned) projectTotalPlanned.textContent = this.formatTime(totalEstimated);
+        if (projectTotalSpent) projectTotalSpent.textContent = this.formatTime(totalSpent);
+        
+        // Calculate efficiency
+        const efficiency = totalEstimated > 0 ? Math.round((totalEstimated / Math.max(totalSpent, 1)) * 100) : 100;
+        if (projectEfficiency) projectEfficiency.textContent = `${Math.min(efficiency, 100)}%`;
+        
+        // Update Progress Overview section
+        const projectProgressBar = document.getElementById('projectProgress');
+        const projectProgressPercentage = document.getElementById('projectProgressPercentage');
+        const tasksCompleted = document.getElementById('tasksCompleted');
+        const tasksRemaining = document.getElementById('tasksRemaining');
+        
+        if (projectProgressBar) projectProgressBar.style.width = `${completionRate}%`;
+        if (projectProgressPercentage) projectProgressPercentage.textContent = `${completionRate}%`;
+        if (tasksCompleted) tasksCompleted.textContent = completedTasks;
+        if (tasksRemaining) tasksRemaining.textContent = totalTasks - completedTasks;
+        
+        console.log('📊 Analytics metrics updated:', {
+            totalTasks, backlogTasks, inProgressTasks, completedTasks,
+            totalSpent: this.formatTime(totalSpent),
+            totalEstimated: this.formatTime(totalEstimated),
+            velocity, efficiency,
+            completionRate: `${completionRate}%`,
+            tasksRemaining: totalTasks - completedTasks
+        });
     }
     
     renderStatusChart() {
-        const ctx = document.getElementById('statusChart');
-        if (!ctx) return;
+        const ctx = document.getElementById('projectTaskDistributionChart');
+        if (!ctx) {
+            console.warn('📊 projectTaskDistributionChart canvas not found');
+            return;
+        }
         
         // Destroy existing chart if it exists
         if (this.statusChartInstance) {
@@ -3354,8 +5302,11 @@ class ProjectBoard {
     }
     
     renderTimeChart() {
-        const ctx = document.getElementById('timeChart');
-        if (!ctx) return;
+        const ctx = document.getElementById('projectBurndownCanvas');
+        if (!ctx) {
+            console.warn('📊 projectBurndownCanvas canvas not found');
+            return;
+        }
         
         // Destroy existing chart if it exists
         if (this.timeChartInstance) {
@@ -3419,8 +5370,11 @@ class ProjectBoard {
     }
     
     renderDeveloperChart() {
-        const ctx = document.getElementById('developerChart');
-        if (!ctx) return;
+        const ctx = document.getElementById('projectTeamVelocityChart');
+        if (!ctx) {
+            console.warn('📊 projectTeamVelocityChart canvas not found');
+            return;
+        }
         
         // Destroy existing chart if it exists
         if (this.developerChartInstance) {
@@ -3482,8 +5436,11 @@ class ProjectBoard {
     }
     
     updateDeveloperStats() {
-        const developerStatsContainer = document.getElementById('developerStatsContainer');
-        if (!developerStatsContainer) return;
+        const developerStatsContainer = document.getElementById('projectDeveloperList');
+        if (!developerStatsContainer) {
+            console.warn('📊 projectDeveloperList container not found');
+            return;
+        }
         
         // Calculate developer statistics
         const developerStats = {};
@@ -3655,30 +5612,63 @@ class ProjectBoard {
             window.location.href = `/analytics?project=${encodeURIComponent(this.currentProject.id)}`;
         }
     }
+
+    getStatusDisplayName(status) {
+        const statusNames = {
+            'backlog': 'Backlog',
+            'progress': 'In Progress',
+            'review': 'Review',
+            'testing': 'Testing',
+            'done': 'Done'
+        };
+        return statusNames[status] || status;
+    }
 }
 
 // Modal close functions
 // Replace async closeTaskModal() with non-blocking close + background save
-function closeTaskModal() {
+async function closeTaskModal() {
+    const isWeb = window.location.hostname.includes("onix-systems-android-tasks");
     try {
         if (window.projectBoard && window.projectBoard.currentTask) {
-            // Save edits in background but DO NOT ask saveTaskChanges to close the modal itself
-            window.projectBoard.saveTaskChanges(window.projectBoard.currentTask, { closeAfterSave: false })
-                .catch(err => console.error('saveTaskChanges (on close) failed:', err));
+            // Force save current task content before closing (WAIT for completion)
+            await window.projectBoard.saveTaskChanges(window.projectBoard.currentTask, { closeAfterSave: false });
+            console.log('✅ Task content saved before closing modal');
         }
 
-        if (window.projectBoard) {
+        if (window.projectBoard && isWeb) {
             // Persist all tasks in background
             window.projectBoard.saveTasksToDisk()
                 .then(() => console.log('Tasks persisted (on close)'))
                 .catch(err => console.error('saveTasksToDisk (on close) failed:', err));
             // clear currentTask reference so UI can reopen safely later
+        }
+        
+        if (window.projectBoard) {
             window.projectBoard.currentTask = null;
+        }
+        
+        // Update URL to remove task parameter when closing (silently without router)
+        if (window.firaRouter) {
+            const currentParams = window.firaRouter.getCurrentParams();
+            if (currentParams.projectname && (currentParams.taskname || currentParams.taskId)) {
+                const projectUrl = `/project/${encodeURIComponent(currentParams.projectname)}`;
+                // Use history.replaceState with path in state to support browser back/forward
+                window.history.replaceState({ path: projectUrl }, '', projectUrl);
+                window.firaRouter.currentRoute = projectUrl;
+                console.log('🔗 Updated URL silently after closing task:', projectUrl);
+            }
         }
     } finally {
         const modal = document.getElementById('taskDetailModal');
         if (modal) modal.style.display = 'none';
         document.body.style.overflow = 'auto';
+        
+        // Refresh kanban board to show updated task status after closing modal
+        if (window.projectBoard) {
+            console.log('🔄 Refreshing kanban board after closing task modal');
+            window.projectBoard.filterAndRenderTasks();
+        }
     }
 }
 
@@ -3716,11 +5706,31 @@ if (editProjectModal) {
     });
 }
 
+// Add Developer Modal backdrop click handler
+const addDeveloperModal = document.getElementById('addDeveloperModal');
+if (addDeveloperModal) {
+    addDeveloperModal.addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) {
+            closeAddDeveloperModal();
+        }
+    });
+}
+
 // Handle escape key
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-        // Try to close task modal and save
-        closeTaskModal().catch(err => console.error(err));
+        // Check which modal is open and close it
+        const addDeveloperModal = document.getElementById('addDeveloperModal');
+        const editProjectModal = document.getElementById('editProjectModal');
+        
+        if (addDeveloperModal && addDeveloperModal.style.display === 'flex') {
+            closeAddDeveloperModal();
+        } else if (editProjectModal && editProjectModal.style.display === 'flex') {
+            closeEditProjectModal();
+        } else {
+            // Try to close task modal and save
+            closeTaskModal().catch(err => console.error(err));
+        }
     }
 });
 
@@ -3749,13 +5759,14 @@ function initializeBoard() {
     }
     
     // Setup drop zones after a small delay to ensure DOM is ready
-    setTimeout(() => {
-        board.setupDropZones();
-    }, 100);
+    // Note: setupDropZones() is now handled by setupUIPermissions()
+    // setTimeout(() => {
+    //     board.setupDropZones();
+    // }, 100);
 }
 
 // Function to initialize project board with specific project for router
-window.initProjectBoard = function(projectName, taskName = null) {
+window.initProjectBoard = async function(projectName, taskName = null) {
     console.log('Initializing project board for:', projectName, taskName ? 'with task:' + taskName : '');
     
     // Use existing global instance if available, otherwise create new one
@@ -3766,8 +5777,17 @@ window.initProjectBoard = function(projectName, taskName = null) {
         window.projectBoard = board; // Ensure it's globally available
     } else {
         console.log(`♻️ Using existing ProjectBoard instance`);
-        // Reset tasks loaded flag for new project
-        board.tasksLoaded = false;
+        // Only reset if we're switching to a different project
+        if (board.lastLoadedProject !== projectName) {
+            console.log(`🔄 Switching from project "${board.lastLoadedProject}" to "${projectName}" - resetting load state`);
+            board.tasksLoaded = false;
+            board.lastLoadedProject = null;
+        } else {
+            console.log(`✅ Same project "${projectName}" - keeping loaded state`);
+        }
+        // Re-setup event listeners for new DOM content
+        console.log('🔄 Re-setting up event listeners for reused instance');
+        board.setupEventListeners();
     }
     
     // Wait for global data to be loaded if needed
@@ -3775,27 +5795,53 @@ window.initProjectBoard = function(projectName, taskName = null) {
         
         // Override the project loading logic
         if (window.PROJECTS_DATA) {
-            board.currentProject = window.PROJECTS_DATA.find(p => p.id === projectName) || { id: projectName, name: decodeURIComponent(projectName) };
+            const foundProject = window.PROJECTS_DATA.find(p => p.id === projectName);
+            if (foundProject) {
+                board.currentProject = foundProject;
+                console.log(`✅ Found project in PROJECTS_DATA for router:`, board.currentProject);
+            } else {
+                board.currentProject = { id: projectName, name: decodeURIComponent(projectName), description: '' };
+                console.log(`⚠️ Project not in PROJECTS_DATA for router, using decoded with empty description:`, board.currentProject);
+            }
         } else {
-            board.currentProject = { id: projectName, name: decodeURIComponent(projectName) };
+            board.currentProject = { id: projectName, name: decodeURIComponent(projectName), description: '' };
+            console.log(`⚠️ No PROJECTS_DATA available for router, using decoded with empty description:`, board.currentProject);
         }
         
         document.getElementById('projectName').textContent = board.currentProject.name;
         
-        // Tasks are already loaded in init(), just filter and render
+        // Try to load fresh project data from server if description is missing
+        if (board.currentProject && (!board.currentProject.description || 
+            board.currentProject.description === board.currentProject.id || 
+            board.currentProject.description.trim() === '')) {
+            
+            console.log('🔄 Loading fresh project data in router mode...');
+            await board.loadFreshProjectData();
+        }
+        
+        // Load tasks for the new project before filtering and rendering
+        await board.loadProjectTasks();
         board.filterAndRenderTasks();
         
         // Setup drop zones
-        setTimeout(() => {
-            board.setupDropZones();
-            
-            // If task name is provided, try to open that task
-            if (taskName) {
-                setTimeout(() => {
-                    board.openTaskByName(decodeURIComponent(taskName));
-                }, 200);
-            }
-        }, 100);
+        // Note: setupDropZones() is now handled by setupUIPermissions()
+        // setTimeout(() => {
+        //     board.setupDropZones();
+        //     
+        //     // If task name is provided, try to open that task
+        //     if (taskName) {
+        //         setTimeout(() => {
+        //             board.openTaskByName(decodeURIComponent(taskName));
+        //         }, 200);
+        //     }
+        // }, 100);
+        
+        // If task name is provided, try to open that task
+        if (taskName) {
+            setTimeout(() => {
+                board.openTaskByName(decodeURIComponent(taskName));
+            }, 200);
+        }
         
     } else if (window.globalDataManager) {
         // Wait for data to load then retry
@@ -3808,9 +5854,10 @@ window.initProjectBoard = function(projectName, taskName = null) {
         board.currentProject = { id: projectName, name: decodeURIComponent(projectName) };
         document.getElementById('projectName').textContent = board.currentProject.name;
         
-        setTimeout(() => {
-            board.setupDropZones();
-        }, 100);
+        // Note: setupDropZones() is now handled by setupUIPermissions()
+        // setTimeout(() => {
+        //     board.setupDropZones();
+        // }, 100);
     }
 };
 
@@ -3821,6 +5868,7 @@ class TimeTrackingManager {
         this.modal = null;
         this.isVisible = false;
         this.originalTimeSpent = '';
+        this.listenersAttached = false;
         
         this.init();
     }
@@ -3833,51 +5881,71 @@ class TimeTrackingManager {
     }
     
     setupEventListeners() {
+        // Prevent duplicate event listeners
+        if (this.listenersAttached) {
+            return;
+        }
+        
         // Time spent input validation and real-time updates
         const timeSpentInput = document.getElementById('timeSpentInput');
         if (timeSpentInput) {
-            timeSpentInput.addEventListener('input', (e) => {
+            this.timeSpentInputHandler = (e) => {
                 this.handleTimeSpentInputChange(e.target.value);
-            });
-            
-            timeSpentInput.addEventListener('blur', () => {
+            };
+            this.timeSpentBlurHandler = () => {
                 this.validateAndFormatTimeSpentInput();
-            });
+            };
+            
+            timeSpentInput.addEventListener('input', this.timeSpentInputHandler);
+            timeSpentInput.addEventListener('blur', this.timeSpentBlurHandler);
         }
         
         // Time original estimate input
         const timeOriginalInput = document.getElementById('timeOriginalInput');
         if (timeOriginalInput) {
-            timeOriginalInput.addEventListener('input', (e) => {
+            this.timeOriginalInputHandler = (e) => {
                 this.handleOriginalEstimateInputChange(e.target.value);
-            });
-            
-            timeOriginalInput.addEventListener('blur', () => {
+            };
+            this.timeOriginalBlurHandler = () => {
                 this.validateAndFormatOriginalEstimateInput();
-            });
+            };
+            
+            timeOriginalInput.addEventListener('input', this.timeOriginalInputHandler);
+            timeOriginalInput.addEventListener('blur', this.timeOriginalBlurHandler);
         }
         
         // Save button
         const saveBtn = document.getElementById('saveTimeTrackingBtn');
         if (saveBtn) {
             console.log('✅ TimeTrackingManager: Save button found and event listener attached');
-            saveBtn.addEventListener('click', () => {
+            this.saveButtonHandler = (e) => {
                 console.log('🔘 TimeTrackingManager: Save button clicked');
+                console.log('🔘 Event details:', e);
+                console.log('🔘 Document body overflow:', document.body.style.overflow);
+                console.log('🔘 Modal display:', this.modal.style.display);
+                
+                // Prevent any potential issues
+                e.preventDefault();
+                e.stopPropagation();
+                
                 this.handleSaveTimeTracking();
-            });
-        } else {
-            console.error('❌ TimeTrackingManager: Save button not found!');
+            };
+            saveBtn.addEventListener('click', this.saveButtonHandler);
         }
         
+        // Mark listeners as attached
+        this.listenersAttached = true;
+        
         // Modal backdrop click
-        this.modal.addEventListener('click', (e) => {
+        this.modalClickHandler = (e) => {
             if (e.target === this.modal) {
                 this.closeModal();
             }
-        });
+        };
+        this.modal.addEventListener('click', this.modalClickHandler);
         
         // Keyboard handlers
-        document.addEventListener('keydown', (e) => {
+        this.keydownHandler = (e) => {
             if (this.isVisible) {
                 if (e.key === 'Escape') {
                     e.preventDefault();
@@ -3887,7 +5955,8 @@ class TimeTrackingManager {
                     this.handleSaveTimeTracking();
                 }
             }
-        });
+        };
+        document.addEventListener('keydown', this.keydownHandler);
     }
     
     // Parse time string with support for weeks, days, hours, minutes
@@ -3919,11 +5988,11 @@ class TimeTrackingManager {
             switch (unit) {
                 case 'w':
                     breakdown.weeks += value;
-                    totalMinutes += value * 7 * 24 * 60; // weeks to minutes
+                    totalMinutes += value * 40 * 60; // weeks to minutes (1w = 40h)
                     break;
                 case 'd':
                     breakdown.days += value;
-                    totalMinutes += value * 24 * 60; // days to minutes
+                    totalMinutes += value * 8 * 60; // days to minutes (1d = 8h)
                     break;
                 case 'h':
                     breakdown.hours += value;
@@ -3954,12 +6023,17 @@ class TimeTrackingManager {
     
     // Format minutes to human readable string
     formatMinutesToString(totalMinutes) {
-        if (!totalMinutes || totalMinutes <= 0) return '0m';
+        if (!totalMinutes || totalMinutes <= 0) return '0h';
         
-        const weeks = Math.floor(totalMinutes / (7 * 24 * 60));
-        const days = Math.floor((totalMinutes % (7 * 24 * 60)) / (24 * 60));
-        const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
-        const minutes = totalMinutes % 60;
+        // Work-based time conversion: 1w = 40h, 1d = 8h
+        const weeks = Math.floor(totalMinutes / (40 * 60)); // 40h * 60min
+        const remainingAfterWeeks = totalMinutes % (40 * 60);
+        
+        const days = Math.floor(remainingAfterWeeks / (8 * 60)); // 8h * 60min  
+        const remainingAfterDays = remainingAfterWeeks % (8 * 60);
+        
+        const hours = Math.floor(remainingAfterDays / 60);
+        const minutes = remainingAfterDays % 60;
         
         const parts = [];
         if (weeks > 0) parts.push(`${weeks}w`);
@@ -3967,7 +6041,7 @@ class TimeTrackingManager {
         if (hours > 0) parts.push(`${hours}h`);
         if (minutes > 0) parts.push(`${minutes}m`);
         
-        return parts.join(' ') || '0m';
+        return parts.length > 0 ? parts.join(' ') : '0h';
     }
     
     // Alias for the same functionality with clearer naming
@@ -4320,6 +6394,16 @@ class TimeTrackingManager {
         this.modal.style.display = 'flex';
         document.body.style.overflow = 'hidden';
         
+        // Force modal positioning and prevent scrollbar issues
+        this.modal.style.position = 'fixed';
+        this.modal.style.top = '0';
+        this.modal.style.left = '0';
+        this.modal.style.width = '100%';
+        this.modal.style.height = '100%';
+        this.modal.style.overflowY = 'auto';
+        
+        console.log('🔒 Modal overflow controls applied');
+        
         // Wait for modal to be rendered, then update displays
         setTimeout(() => {
             console.log('Updating displays after modal is shown...');
@@ -4401,16 +6485,24 @@ class TimeTrackingManager {
     
     // Close modal
     closeModal() {
+        console.log('🚪 TimeTrackingManager: closeModal called');
+        console.log('🚪 isVisible:', this.isVisible);
+        
         if (!this.isVisible) return;
         
+        console.log('🚪 Closing modal...');
         this.modal.style.display = 'none';
         document.body.style.overflow = 'auto';
         this.isVisible = false;
         this.currentTask = null;
         this.originalTimeSpent = '';
         
+        console.log('🚪 Document body overflow restored to:', document.body.style.overflow);
+        
         // Reset form
         this.resetForm();
+        
+        console.log('🚪 Modal closed successfully');
     }
     
     // Reset form to clean state
@@ -4517,6 +6609,13 @@ class TimeTrackingManager {
                 console.log(`✅ Updated estimateInput DOM field to: ${cleanValue}`);
             }
             
+            // Also update the create task form estimate field if we're in task creation mode
+            const newTaskEstimate = document.getElementById('newTaskEstimate');
+            if (newTaskEstimate && this.currentTask._isNew) {
+                newTaskEstimate.value = this.currentTask.timeEstimate;
+                console.log(`✅ Updated newTaskEstimate form field to: ${this.currentTask.timeEstimate}`);
+            }
+            
             // Update task in the board if it exists
             this.updateTaskInBoard(this.currentTask);
             
@@ -4534,6 +6633,33 @@ class TimeTrackingManager {
                 window.projectBoard.parseAndDisplayActivities(this.currentTask);
             }
             
+            // CRITICAL FIX: Synchronize window.projectBoard.currentTask with our updated task
+            // This ensures saveTaskChanges works with the correct data when called from task details modal
+            if (window.projectBoard) {
+                console.log('🔄 TimeTrackingManager: Synchronizing projectBoard.currentTask with updated time data');
+                console.log('  Before sync - projectBoard.currentTask:', {
+                    id: window.projectBoard.currentTask?.id,
+                    timeEstimate: window.projectBoard.currentTask?.timeEstimate,
+                    timeSpent: window.projectBoard.currentTask?.timeSpent
+                });
+                
+                // Update the main ProjectBoard's currentTask reference with our changes
+                if (window.projectBoard.currentTask && window.projectBoard.currentTask.id === this.currentTask.id) {
+                    window.projectBoard.currentTask.timeEstimate = this.currentTask.timeEstimate;
+                    window.projectBoard.currentTask.timeSpent = this.currentTask.timeSpent;
+                    console.log('✅ Synchronized projectBoard.currentTask with time tracking updates');
+                } else {
+                    console.warn('⚠️ ProjectBoard.currentTask ID mismatch or missing, using time tracking manager task');
+                    window.projectBoard.currentTask = { ...this.currentTask };
+                }
+                
+                console.log('  After sync - projectBoard.currentTask:', {
+                    id: window.projectBoard.currentTask.id,
+                    timeEstimate: window.projectBoard.currentTask.timeEstimate,
+                    timeSpent: window.projectBoard.currentTask.timeSpent
+                });
+            }
+
             // Save changes to disk using the project board instance
             if (window.projectBoard && typeof window.projectBoard.saveTaskChanges === 'function') {
                 console.log('🔄 TimeTrackingManager: Calling ProjectBoard.saveTaskChanges with updated task:', {
@@ -4614,7 +6740,13 @@ class TimeTrackingManager {
         taskCards.forEach(card => {
             const timeDisplay = card.querySelector('.task-time');
             if (timeDisplay) {
-                timeDisplay.textContent = `${updatedTask.timeSpent}/${updatedTask.timeEstimate}`;
+                // Use ProjectBoard methods for time formatting
+                if (window.projectBoard && typeof window.projectBoard.formatTime === 'function' && typeof window.projectBoard.parseTime === 'function') {
+                    timeDisplay.textContent = `${window.projectBoard.formatTime(window.projectBoard.parseTime(updatedTask.timeSpent || '0h'))}/${window.projectBoard.formatTime(window.projectBoard.parseTime(updatedTask.timeEstimate || '0h'))}`;
+                } else {
+                    // Fallback to raw values
+                    timeDisplay.textContent = `${updatedTask.timeSpent || '0h'}/${updatedTask.timeEstimate || '0h'}`;
+                }
             }
         });
     }
@@ -4882,6 +7014,20 @@ function closeEditProjectModal() {
     }
 }
 
+// Global function for closing add developer modal
+function closeAddDeveloperModal() {
+    if (window.projectBoard && typeof window.projectBoard.closeAddDeveloperModal === 'function') {
+        window.projectBoard.closeAddDeveloperModal();
+    } else {
+        // Fallback
+        const modal = document.getElementById('addDeveloperModal');
+        if (modal) {
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+    }
+}
+
 // Assignee Dropdown Manager
 class AssigneeDropdownManager {
     constructor() {
@@ -5097,6 +7243,125 @@ class AssigneeDropdownManager {
         
         console.log('Estimate changed to:', input.value);
     }
+    
+    moveTaskToColumn(task, oldStatus, newStatus) {
+        console.log(`Moving task ${task.id} from ${oldStatus} to ${newStatus}`);
+        
+        // Remove task from old column
+        const oldColumnContent = document.querySelector(`[data-column="${oldStatus}"] .column-content`);
+        if (oldColumnContent) {
+            const taskCard = oldColumnContent.querySelector(`[data-task-id="${task.id}"]`);
+            if (taskCard) {
+                taskCard.remove();
+            }
+        }
+        
+        // Add task to new column
+        const newColumnContent = document.querySelector(`[data-column="${newStatus}"] .column-content`);
+        if (newColumnContent) {
+            // Create new task card
+            const taskCard = this.createTaskCard(task);
+            newColumnContent.appendChild(taskCard);
+        }
+        
+        // Update column counts
+        this.updateColumnCounts();
+        
+        // Update task's status
+        task.status = newStatus;
+        task.column = newStatus;
+        
+        // Update analytics if in analytics view
+        if (this.currentView === 'analytics') {
+            this.updateAnalyticsMetrics();
+        }
+        
+        console.log(`Task ${task.id} moved successfully to ${newStatus}`);
+    }
+    
+    setupChartToggleButtons() {
+        const chartToggleButtons = document.querySelectorAll('.chart-toggle');
+        const chartWrappers = {
+            'velocity': document.getElementById('projectVelocityChart'),
+            'burndown': document.getElementById('projectBurndownChart'), 
+            'distribution': document.getElementById('projectDistributionChart')
+        };
+        
+        chartToggleButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                // Remove active class from all buttons
+                chartToggleButtons.forEach(btn => btn.classList.remove('active'));
+                // Add active class to clicked button
+                button.classList.add('active');
+                
+                // Hide all chart wrappers
+                Object.values(chartWrappers).forEach(wrapper => {
+                    if (wrapper) wrapper.classList.add('hidden');
+                });
+                
+                // Show selected chart wrapper
+                const selectedChart = button.dataset.chart;
+                const selectedWrapper = chartWrappers[selectedChart];
+                if (selectedWrapper) {
+                    selectedWrapper.classList.remove('hidden');
+                }
+                
+                console.log(`📊 Switched to ${selectedChart} chart`);
+            });
+        });
+        
+        console.log('📊 Chart toggle buttons setup complete');
+    }
+
+    // Delete task functionality
+    async deleteTask(taskId) {
+        try {
+            console.log(`🗑️ Deleting task: ${taskId}`);
+
+            // Find the task to delete
+            const taskToDelete = this.tasks.find(task => task.id === taskId);
+            if (!taskToDelete) {
+                throw new Error(`Task ${taskId} not found`);
+            }
+
+            // Remove from tasks array
+            this.tasks = this.tasks.filter(task => task.id !== taskId);
+
+            // Delete the task file from server
+            if (this.isWebVersion && window.globalDataManager && window.globalDataManager.apiClient) {
+                console.log(`🔄 Deleting task file for ${taskId} via API`);
+                await window.globalDataManager.apiClient.deleteTask(this.currentProject.id, taskId);
+                console.log(`✅ Task file deleted successfully for ${taskId}`);
+            }
+
+            // Close task detail modal if it's open for this task
+            if (this.currentTask && this.currentTask.id === taskId) {
+                // Use global function
+                if (typeof closeTaskModal === 'function') {
+                    await closeTaskModal();
+                } else {
+                    // Fallback to direct modal close
+                    const modal = document.getElementById('taskDetailModal');
+                    if (modal) {
+                        modal.style.display = 'none';
+                        document.body.style.overflow = 'auto';
+                    }
+                    this.currentTask = null;
+                }
+            }
+
+            // Refresh the kanban board
+            this.renderBoard();
+
+            console.log(`✅ Task ${taskId} deleted successfully`);
+            return true;
+
+        } catch (error) {
+            console.error('❌ Error deleting task:', error);
+            alert(`Error deleting task: ${error.message}`);
+            return false;
+        }
+    }
 }
 
 
@@ -5107,7 +7372,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.assigneeDropdownManager = new AssigneeDropdownManager();
     }
 });
-console.log('📋 window.initProjectBoard available:', typeof window.initProjectBoard);
+console.log('📋 v2.3 Project Board JS loaded - window.initProjectBoard available:', typeof window.initProjectBoard);
 
 // Global functions for create task detail modal
 window.closeCreateTaskDetailModal = function() {
@@ -5115,6 +7380,16 @@ window.closeCreateTaskDetailModal = function() {
     if (modal) {
         modal.style.display = 'none';
         document.body.style.overflow = 'auto';
+        
+        // Clear currentTask when closing create modal
+        if (window.projectBoard) {
+            console.log('🧹 Clearing currentTask on create modal close');
+            window.projectBoard.currentTask = null;
+            
+            // Refresh kanban board to show any newly created tasks
+            console.log('🔄 Refreshing kanban board after closing create task modal');
+            window.projectBoard.filterAndRenderTasks();
+        }
     }
 };
 
@@ -5129,11 +7404,22 @@ window.createNewTaskFromModal = async function() {
             return;
         }
         console.log('✅ Project board instance found:', projectBoard.constructor.name);
-        
+
+
         // Collect data from the modal
         const taskName = document.getElementById('createTaskNameInput')?.value?.trim();
         const description = document.getElementById('createTaskDescriptionEditor')?.value?.trim() || '';
         const priority = document.getElementById('createTaskPrioritySelect')?.value || 'medium';
+        const status = document.getElementById('createTaskStatusSelect')?.value || 'backlog';
+        
+        console.log('🔍 DEBUG: Task creation values:', {
+            taskName: taskName,
+            taskNameEmpty: !taskName,
+            taskNameLength: taskName ? taskName.length : 0,
+            description: description,
+            priority: priority,
+            status: status
+        });
         const assigneeSelected = document.querySelector('#createDropdownSelected .selected-value')?.textContent || 'Unassigned';
         
         // Validate required fields
@@ -5153,19 +7439,33 @@ window.createNewTaskFromModal = async function() {
         console.log('📁 Project ID:', projectBoard.currentProject.id);
         console.log('📁 Project name:', projectBoard.currentProject.name);
         
-        // Determine correct column/folder based on assignment
-        let targetColumn = 'backlog';
-        let targetFolder = 'backlog';
+        // Determine correct column/folder based on status and assignment
+        let targetColumn = status;
+        let targetFolder = status;
         
-        // If task is assigned to someone, put it in their progress folder
+        // Handle assignment logic:
+        // - If assigned to someone and status is backlog, change to progress automatically
+        // - If assigned to someone and status is progress/review/testing/done, put in dev folder
         if (assigneeSelected !== 'Unassigned') {
-            targetColumn = 'progress';
-            targetFolder = `progress/${assigneeSelected}`;
+            if (status === 'backlog') {
+                // Auto-change from backlog to progress when assigned
+                targetColumn = 'progress';
+                targetFolder = `progress/${assigneeSelected}`;
+            } else if (status === 'progress') {
+                targetFolder = `progress/${assigneeSelected}`;
+            } else if (status === 'review') {
+                targetFolder = `review/${assigneeSelected}`;
+            } else if (status === 'testing') {
+                targetFolder = `testing/${assigneeSelected}`;
+            } else if (status === 'done') {
+                targetFolder = `done/${assigneeSelected}`;
+            }
         }
         
         // Create task data
+        const taskId = await projectBoard.generateTaskIdAsync();
         const taskData = {
-            id: projectBoard.generateTaskId(),
+            id: taskId,
             title: taskName,
             content: description,
             fullContent: description,
@@ -5180,7 +7480,7 @@ window.createNewTaskFromModal = async function() {
             projectId: projectBoard.currentProject.id,
             // Add UI-specific fields
             status: targetColumn,
-            file_path: `${targetFolder}/${projectBoard.generateTaskId()}.md`
+            file_path: `${targetFolder}/${taskId}.md`
         };
         
         // Create markdown content with YAML frontmatter
@@ -5190,6 +7490,7 @@ estimate: ${taskData.timeEstimate}
 spent_time: ${taskData.timeSpent}
 priority: ${taskData.priority}
 developer: ${taskData.developer}
+status: ${taskData.status || taskData.column || 'backlog'}
 created: ${taskData.created}
 ---
 
@@ -5204,52 +7505,190 @@ ${taskData.content}`;
         console.log('apiClient:', !!window.globalDataManager?.apiClient);
         console.log('loadingMode:', window.globalDataManager?.loadingMode);
         
+        // Add detailed debugging
+        if (window.globalDataManager) {
+            console.log('🔍 GlobalDataManager details:', {
+                isLoaded: window.globalDataManager.isLoaded,
+                loadingMode: window.globalDataManager.loadingMode,
+                hasApiClient: !!window.globalDataManager.apiClient,
+                apiClientBaseUrl: window.globalDataManager.apiClient?.baseUrl,
+                currentDirectoryPath: window.globalDataManager.currentDirectoryPath
+            });
+        }
+        
         if (window.globalDataManager && window.globalDataManager.apiClient) {
             // First check if server is available
             console.log('🔄 Checking server status before creating task...');
+            console.log('🔍 API Client baseUrl:', window.globalDataManager.apiClient.baseUrl);
+            console.log('🔍 Current isServerAvailable:', window.globalDataManager.apiClient.isServerAvailable);
+            
             const isServerAvailable = await window.globalDataManager.apiClient.checkServerStatus();
-            console.log('Server available:', isServerAvailable);
+            console.log('🔍 After checkServerStatus, isServerAvailable:', isServerAvailable);
+            console.log('🔍 API Client isServerAvailable property:', window.globalDataManager.apiClient.isServerAvailable);
             
             if (!isServerAvailable) {
-                throw new Error('Server is not available. Please make sure the server is running on port 8080.');
+                console.error('❌ Server check failed. Cannot create task.');
+                throw new Error('Server is not available. Please make sure the server is running.');
             }
             
             try {
                 // Create task via API
                 console.log('📡 Calling createTask API...');
+                console.log('📂 Creating task in project:', projectBoard.currentProject.id);
+                console.log('📝 Task data sending to server:', JSON.stringify(taskData, null, 2));
+                
+                // Check the exact URL that will be called
+                const apiUrl = `${window.globalDataManager.apiClient.baseUrl}/api/projects/${encodeURIComponent(projectBoard.currentProject.id)}/tasks`;
+                console.log('🔗 API URL:', apiUrl);
+                
                 const result = await window.globalDataManager.apiClient.createTask(
                     projectBoard.currentProject.id, 
                     taskData
                 );
                 
-                console.log('API createTask result:', result);
+                console.log('📨 API createTask result:', result);
+                console.log('📨 API createTask result type:', typeof result);
                 
                 if (result === true) {
                     console.log('✅ Task created successfully');
                     
-                    // Close the create task modal
-                    window.closeCreateTaskDetailModal();
-                    
-                    // Instead of modifying projectBoard.tasks directly (which affects all projects),
-                    // let's reload tasks for the current project only
-                    console.log('🔄 Reloading tasks for current project after task creation');
-                    
-                    // Reset the tasksLoaded flag to allow reloading
-                    projectBoard.tasksLoaded = false;
-                    
-                    await projectBoard.loadProjectTasks();
-                    projectBoard.filterAndRenderTasks();
-                    
-                    // Show success message with assignment info
+                    // Show success message first
                     let successMessage = `Task "${taskData.title}" created successfully`;
                     if (taskData.assignee) {
                         successMessage += ` and assigned to ${taskData.assignee}`;
                     }
-                    
                     projectBoard.showMessage(successMessage, 'success');
                     
-                    // Make sure we're back to the board view (not task detail view)
-                    console.log('📋 Returned to task board after creating task');
+                    // Close the create task modal
+                    window.closeCreateTaskDetailModal();
+                    
+                    console.log('🔄 Simple reload: Just reloading current project tasks...');
+                    
+                    // Simple approach: just reload tasks for current project
+                    projectBoard.tasksLoaded = false;
+                    
+                    // Simple reload approach
+                    try {
+                        console.log('🔄 Reloading tasks for current project...');
+                        console.log('🔍 Current project:', projectBoard.currentProject?.id);
+                        console.log('🔍 Task was created in project:', taskData.projectId);
+                        console.log('🔍 Project match:', projectBoard.currentProject?.id === taskData.projectId);
+                        
+                        // Gentle approach: Just refresh tasks for current project
+                        console.log('🔄 Refreshing tasks for current project...');
+                        
+                        // Temporarily clear only the project-specific cache flags
+                        const wasTasksLoaded = projectBoard.tasksLoaded;
+                        const wasLastProject = projectBoard.lastLoadedProject;
+                        
+                        projectBoard.tasksLoaded = false;
+                        projectBoard.lastLoadedProject = null;
+                        
+                        // If using global data manager, refresh only this project's tasks
+                        if (window.globalDataManager && window.globalDataManager.apiClient) {
+                            console.log('🔄 Refreshing tasks via API for current project only...');
+                            try {
+                                const tasksResponse = await window.globalDataManager.apiClient.getProjectTasks(projectBoard.currentProject.id);
+                                if (tasksResponse.success) {
+                                    // Update only this project's tasks in the global cache
+                                    window.globalDataManager.projectTasks[projectBoard.currentProject.id] = tasksResponse.tasks;
+                                    
+                                    // Remove old tasks from allTasks and add new ones
+                                    window.globalDataManager.allTasks = window.globalDataManager.allTasks.filter(
+                                        task => task.projectId !== projectBoard.currentProject.id
+                                    );
+                                    window.globalDataManager.allTasks.push(...tasksResponse.tasks);
+                                    
+                                    console.log(`✅ Updated cache with ${tasksResponse.tasks.length} tasks for project ${projectBoard.currentProject.id}`);
+                                }
+                            } catch (refreshError) {
+                                console.warn('⚠️ Failed to refresh project tasks via API:', refreshError);
+                                // Restore original cache flags if refresh failed
+                                projectBoard.tasksLoaded = wasTasksLoaded;
+                                projectBoard.lastLoadedProject = wasLastProject;
+                            }
+                        }
+                        
+                        // Now reload tasks for current project
+                        await projectBoard.loadProjectTasks();
+                        
+                        // Fallback: If still no tasks loaded or new task not found, force direct API call
+                        if (!projectBoard.tasks || projectBoard.tasks.length === 0 || 
+                            !projectBoard.tasks.find(t => t.id === taskData.id)) {
+                            console.log('🚨 Fallback: Direct API reload due to cache issues...');
+                            
+                            try {
+                                // Direct API call bypassing all cache
+                                const directResponse = await fetch(`/api/projects/${projectBoard.currentProject.id}/tasks`);
+                                if (directResponse.ok) {
+                                    const directData = await directResponse.json();
+                                    if (directData.success && directData.tasks) {
+                                        projectBoard.tasks = directData.tasks;
+                                        console.log(`✅ Direct API reload successful: ${directData.tasks.length} tasks loaded`);
+                                        
+                                        const createdTask = projectBoard.tasks.find(t => t.id === taskData.id);
+                                        if (createdTask) {
+                                            console.log('✅ Created task found via direct API call');
+                                        }
+                                    }
+                                }
+                            } catch (directError) {
+                                console.error('❌ Direct API fallback failed:', directError);
+                            }
+                        }
+                        console.log('✅ Tasks reloaded successfully');
+                        console.log('🔍 Total tasks after reload:', projectBoard.tasks?.length);
+                        
+                        // Check if our created task is in the loaded tasks
+                        const createdTask = projectBoard.tasks?.find(task => task.id === taskData.id);
+                        if (createdTask) {
+                            console.log('✅ Created task found in loaded tasks:', createdTask.title);
+                            console.log('🔍 Task details:', {
+                                id: createdTask.id,
+                                title: createdTask.title,
+                                status: createdTask.status,
+                                column: createdTask.column,
+                                assignee: createdTask.assignee
+                            });
+                        } else {
+                            console.log('❌ Created task NOT found in loaded tasks');
+                            console.log('🔍 Available task IDs:', projectBoard.tasks?.map(t => t.id) || []);
+                        }
+                        
+                        // Re-render the interface
+                        projectBoard.filterAndRenderTasks();
+                        console.log('✅ Interface updated');
+                        
+                        // Additional verification: Ensure the created task is visible in UI
+                        setTimeout(() => {
+                            const taskCards = document.querySelectorAll('.task-card');
+                            const createdTaskCard = Array.from(taskCards).find(card => 
+                                card.dataset.taskId === taskData.id || 
+                                card.innerHTML.includes(taskData.id)
+                            );
+                            
+                            if (createdTaskCard) {
+                                console.log('✅ Created task is visible in UI');
+                                // Briefly highlight the new task
+                                createdTaskCard.style.border = '2px solid #28a745';
+                                createdTaskCard.style.boxShadow = '0 0 10px rgba(40, 167, 69, 0.5)';
+                                setTimeout(() => {
+                                    createdTaskCard.style.border = '';
+                                    createdTaskCard.style.boxShadow = '';
+                                }, 3000);
+                            } else {
+                                console.log('⚠️ Created task not visible in UI, but should be in data');
+                                console.log('🔍 Available task cards:', taskCards.length);
+                                console.log('🔍 Looking for task ID:', taskData.id);
+                            }
+                        }, 500);
+                        
+                    } catch (error) {
+                        console.error('❌ Failed to reload tasks:', error);
+                        console.error('❌ Error stack:', error.stack);
+                    }
+                    
+                    console.log('📋 Task creation and reload process completed successfully');
                     
                 } else {
                     throw new Error('Failed to create task');
@@ -5266,6 +7705,43 @@ ${taskData.content}`;
     } catch (error) {
         console.error('Error in createNewTaskFromModal:', error);
         alert(`Error creating task: ${error.message}`);
+    }
+};
+
+// Global delete task functions
+window.showDeleteTaskConfirmation = function() {
+    const modal = document.getElementById('deleteTaskConfirmationModal');
+    if (modal) {
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+};
+
+window.hideDeleteTaskConfirmation = function() {
+    const modal = document.getElementById('deleteTaskConfirmationModal');
+    if (modal) {
+        modal.style.display = 'none';
+        document.body.style.overflow = 'auto';
+    }
+};
+
+window.confirmDeleteTask = async function() {
+    const projectBoard = window.projectBoard;
+    if (!projectBoard || !projectBoard.currentTask) {
+        console.error('❌ ProjectBoard instance or current task not found');
+        return;
+    }
+
+    const taskId = projectBoard.currentTask.id;
+    console.log(`🗑️ Confirming delete for task: ${taskId}`);
+
+    // Hide confirmation dialog
+    window.hideDeleteTaskConfirmation();
+
+    // Delete the task
+    const success = await projectBoard.deleteTask(taskId);
+    if (success) {
+        console.log(`✅ Task ${taskId} deleted successfully`);
     }
 };
 
@@ -5287,4 +7763,20 @@ window.openCreateTaskFullScreen = function() {
         console.log('Create task only available in server mode');
         alert('Create task feature is only available when using server mode');
     }
+};
+
+// Global function for opening task by ID (used by router)
+window.openTaskById = function(taskId) {
+    console.log('🔍 openTaskById called with:', taskId);
+
+    // Get current project board instance
+    const projectBoard = window.projectBoard;
+    if (!projectBoard) {
+        console.error('❌ ProjectBoard instance not found');
+        return;
+    }
+
+    // Use the improved openTaskByName method which handles both ID and name search
+    // and includes its own logic for waiting for tasks to load
+    projectBoard.openTaskByName(taskId);
 };

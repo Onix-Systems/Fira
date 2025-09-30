@@ -923,175 +923,6 @@
     text-fill-color: transparent;
 }
 
-/* Delete Task Button */
-.delete-task-button {
-    background: none;
-    border: none;
-    padding: 8px;
-    border-radius: 6px;
-    cursor: pointer;
-    color: #6b7280;
-    transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.delete-task-button:hover {
-    background: #fee2e2;
-    color: #dc2626;
-    transform: scale(1.05);
-}
-
-.delete-task-button:active {
-    transform: scale(0.95);
-}
-
-/* Delete Confirmation Modal */
-.delete-confirmation-modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 2100;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-}
-
-.delete-confirmation-modal .modal-backdrop {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.75);
-    backdrop-filter: blur(4px);
-}
-
-.delete-confirmation-modal .modal-container {
-    position: relative;
-    z-index: 2101;
-    background: #ffffff;
-    border-radius: 12px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), 0 8px 32px rgba(0, 0, 0, 0.12);
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    max-width: 450px;
-    width: 90%;
-    margin: 20px;
-    overflow: hidden;
-    animation: modalSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.delete-confirmation-modal .modal-content {
-    padding: 0;
-}
-
-.delete-confirmation-modal .modal-header {
-    padding: 24px 24px 16px 24px;
-    border-bottom: 1px solid #f3f4f6;
-    background: linear-gradient(135deg, #fef2f2 0%, #ffffff 100%);
-}
-
-.delete-confirmation-modal .modal-header h2 {
-    margin: 0;
-    font-size: 20px;
-    font-weight: 700;
-    color: #dc2626;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.delete-confirmation-modal .modal-header h2::before {
-    content: "⚠️";
-    font-size: 24px;
-}
-
-.delete-confirmation-modal .modal-body {
-    padding: 24px;
-    color: #374151;
-    font-size: 16px;
-    line-height: 1.6;
-    background: #ffffff;
-}
-
-.delete-confirmation-modal .modal-body p {
-    margin: 0;
-}
-
-.delete-confirmation-modal .modal-footer {
-    padding: 20px 24px 24px 24px;
-    display: flex;
-    gap: 16px;
-    justify-content: flex-end;
-    border-top: 1px solid #f3f4f6;
-    background: #fafafa;
-}
-
-.delete-confirmation-modal .btn {
-    padding: 12px 24px;
-    border: 2px solid transparent;
-    border-radius: 8px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    min-width: 100px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    font-family: inherit;
-    outline: none;
-    position: relative;
-    overflow: hidden;
-}
-
-.delete-confirmation-modal .btn-secondary {
-    background: #ffffff;
-    color: #6b7280;
-    border-color: #d1d5db;
-}
-
-.delete-confirmation-modal .btn-secondary:hover {
-    background: #f9fafb;
-    color: #374151;
-    border-color: #9ca3af;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.delete-confirmation-modal .btn-danger {
-    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
-    color: white;
-    border-color: #dc2626;
-    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
-}
-
-.delete-confirmation-modal .btn-danger:hover {
-    background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%);
-    border-color: #b91c1c;
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(220, 38, 38, 0.4);
-}
-
-.delete-confirmation-modal .btn:active {
-    transform: translateY(0);
-    transition: transform 0.1s;
-}
-
-@keyframes modalSlideIn {
-    from {
-        opacity: 0;
-        transform: scale(0.8) translateY(-20px);
-    }
-    to {
-        opacity: 1;
-        transform: scale(1) translateY(0);
-    }
-}
-
 .task-modal-actions {
     position: relative;
     width: 164px;
@@ -4152,41 +3983,6 @@
     justify-content: space-between;
     padding: 0 16px;
     box-sizing: border-box;
-    cursor: pointer;
-    transition: background 0.2s ease;
-}
-
-.figma-column-header:hover {
-    background: #C9C9C9;
-}
-
-.figma-header-right {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.column-sort-arrow {
-    color: #666;
-    transition: transform 0.2s ease, color 0.2s ease;
-    opacity: 0.6;
-}
-
-.figma-column-header:hover .column-sort-arrow {
-    opacity: 1;
-    color: #333;
-}
-
-.figma-column-header[data-sort="asc"] .column-sort-arrow {
-    transform: rotate(0deg);
-    opacity: 1;
-    color: #333;
-}
-
-.figma-column-header[data-sort="desc"] .column-sort-arrow {
-    transform: rotate(180deg);
-    opacity: 1;
-    color: #333;
 }
 
 .figma-column-title {
@@ -4322,4 +4118,149 @@
         opacity: 0;
         transform: translate(-50%, -50%) scale(0.8);
     }
+}
+
+/* Delete Task Confirmation Modal */
+.delete-confirmation-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2100;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.delete-confirmation-modal .modal-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(2px);
+}
+
+.delete-confirmation-modal .modal-container {
+    position: relative;
+    z-index: 2101;
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15), 0 4px 20px rgba(0, 0, 0, 0.08);
+    border: 1px solid #e5e7eb;
+    width: 100%;
+    max-width: 400px;
+    margin: 0 20px;
+    overflow: hidden;
+    animation: modalSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    box-sizing: border-box;
+}
+
+.delete-confirmation-modal .modal-content {
+    padding: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.delete-confirmation-modal .modal-header {
+    padding: 32px 32px 24px 32px;
+    border-bottom: none;
+    background: #ffffff;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.delete-confirmation-modal .modal-header h2 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 600;
+    color: #374151;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.delete-confirmation-modal .modal-header h2::before {
+    content: "";
+    width: 44px;
+    height: 44px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Ccircle cx='12' cy='12' r='10' stroke='%23ef4444' stroke-width='1.5'/%3E%3Cpath d='M12 7v6' stroke='%23ef4444' stroke-width='2' stroke-linecap='round'/%3E%3Ccircle cx='12' cy='16' r='1' fill='%23ef4444'/%3E%3C/svg%3E") center/24px no-repeat;
+    background-color: #fef2f2;
+    border-radius: 50%;
+    flex-shrink: 0;
+    border: none;
+}
+
+.delete-confirmation-modal .modal-body {
+    padding: 0 32px 28px 32px;
+    color: #6b7280;
+    font-size: 15px;
+    line-height: 1.6;
+    background: #ffffff;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.delete-confirmation-modal .modal-body p {
+    margin: 0;
+}
+
+.delete-confirmation-modal .modal-footer {
+    padding: 24px 32px 32px 32px;
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    border-top: none;
+    background: #ffffff;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.delete-confirmation-modal .btn {
+    padding: 12px 20px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 90px;
+    font-family: inherit;
+    outline: none;
+    position: relative;
+}
+
+.delete-confirmation-modal .btn-secondary {
+    background: #ffffff;
+    color: #6b7280;
+    border-color: #d1d5db;
+}
+
+.delete-confirmation-modal .btn-secondary:hover {
+    background: #f9fafb;
+    color: #374151;
+    border-color: #9ca3af;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.delete-confirmation-modal .btn-danger {
+    background: #ef4444;
+    color: white;
+    border-color: #ef4444;
+}
+
+.delete-confirmation-modal .btn-danger:hover {
+    background: #dc2626;
+    border-color: #dc2626;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 12px rgba(239, 68, 68, 0.3);
+}
+
+.delete-confirmation-modal .btn:active {
+    transform: translateY(0);
 }

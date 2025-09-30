@@ -126,7 +126,7 @@ class FiraRouter {
         console.log('Navigating to:', path);
 
         if (pushState && window.location.pathname !== path) {
-            window.history.pushState({}, '', path);
+            window.history.pushState({ path: path }, '', path);
         }
 
         this.currentRoute = path;
@@ -194,8 +194,16 @@ class FiraRouter {
         return params;
     }
 
-    handlePopState() {
-        this.navigateTo(window.location.pathname, false);
+    handlePopState(event) {
+        console.log('🔙 Browser back/forward button pressed');
+        console.log('  Current pathname:', window.location.pathname);
+        console.log('  History state:', event.state);
+
+        // Get the path from history state or fallback to current pathname
+        const path = event.state?.path || window.location.pathname;
+        console.log('  Navigating to:', path);
+
+        this.navigateTo(path, false);
     }
 
     handleLinkClick(event) {
@@ -375,6 +383,13 @@ class FiraRouter {
         if (window.location.protocol === 'file:' || initialPath.includes('.html')) {
             initialPath = '/';
         }
+
+        // Initialize history state if it doesn't exist
+        if (!window.history.state || !window.history.state.path) {
+            console.log('🔧 Initializing history state');
+            window.history.replaceState({ path: initialPath }, '', initialPath);
+        }
+
         this.navigateTo(initialPath, false);
     }
 }
@@ -488,6 +503,17 @@ const RouteHandlers = {
                 if (!firaRouter.currentRoute || !firaRouter.currentRoute.includes('/project/')) return;
                 await new Promise(r => setTimeout(r, 100));
                 if (window.globalDataManager && !window.globalDataManager.isDataLoaded()) await window.globalDataManager.initialize();
+
+                // Add project board URL to history before opening task
+                const projectUrl = `/project/${encodeURIComponent(projectname)}`;
+                const taskUrl = `/project/${encodeURIComponent(projectname)}/task/${encodeURIComponent(taskId)}`;
+
+                // Replace current history entry with project board URL
+                console.log('🔗 Adding project board to history before opening task');
+                window.history.replaceState({ path: projectUrl }, '', projectUrl);
+                // Then add task URL as new entry
+                window.history.pushState({ path: taskUrl }, '', taskUrl);
+                firaRouter.currentRoute = taskUrl;
 
                 if (typeof openTaskById === 'function') {
                     openTaskById(taskId);

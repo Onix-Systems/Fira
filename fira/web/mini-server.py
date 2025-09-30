@@ -471,12 +471,76 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
         return self.client_address[0]
 
     def do_DELETE(self):
-        """Handle DELETE requests for deleting a project"""
+        """Handle DELETE requests for deleting a project or task"""
         parsed_path = urlparse(self.path)
         path_parts = parsed_path.path.strip('/').split('/')
 
-        # Очікуваний формат: /api/projects/{project_id}
-        if len(path_parts) == 3 and path_parts[0] == 'api' and path_parts[1] == 'projects':
+        # Формат для видалення таски: /api/projects/{project_id}/tasks/{task_id}
+        if len(path_parts) == 5 and path_parts[0] == 'api' and path_parts[1] == 'projects' and path_parts[3] == 'tasks':
+            try:
+                project_id = unquote(path_parts[2])
+                task_id = unquote(path_parts[4])
+
+                print(f"🗑️ Attempting to delete task: {task_id} from project: {project_id}")
+
+                # Знайти та видалити файл таски
+                project_path = self.project_manager.base_dir / project_id
+                if not project_path.exists():
+                    self.send_json_response({
+                        'success': False,
+                        'error': f'Project {project_id} not found'
+                    }, 404)
+                    return
+
+                # Шукаємо файл таски в усіх папках статусів
+                task_file_path = None
+                status_folders = ['backlog', 'progress', 'review', 'testing', 'done']
+
+                for status in status_folders:
+                    # Перевіряємо кореневу папку статусу
+                    status_path = project_path / status
+                    if status_path.exists():
+                        task_file = status_path / f"{task_id}.md"
+                        if task_file.exists():
+                            task_file_path = task_file
+                            break
+
+                        # Перевіряємо підпапки розробників
+                        for dev_folder in status_path.iterdir():
+                            if dev_folder.is_dir():
+                                task_file = dev_folder / f"{task_id}.md"
+                                if task_file.exists():
+                                    task_file_path = task_file
+                                    break
+
+                    if task_file_path:
+                        break
+
+                if not task_file_path:
+                    self.send_json_response({
+                        'success': False,
+                        'error': f'Task {task_id} not found in project {project_id}'
+                    }, 404)
+                    return
+
+                # Видаляємо файл таски
+                task_file_path.unlink()
+                print(f"✅ Task file deleted: {task_file_path}")
+
+                self.send_json_response({
+                    'success': True,
+                    'message': f'Task {task_id} deleted from project {project_id}'
+                }, 200)
+
+            except Exception as e:
+                print(f"Error deleting task: {e}")
+                self.send_json_response({
+                    'success': False,
+                    'error': str(e)
+                }, 500)
+
+        # Формат для видалення проекту: /api/projects/{project_id}
+        elif len(path_parts) == 3 and path_parts[0] == 'api' and path_parts[1] == 'projects':
             try:
                 project_id = unquote(path_parts[2])
                 project_path = self.project_manager.base_dir / project_id
