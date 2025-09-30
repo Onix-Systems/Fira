@@ -27,9 +27,9 @@ Perfect for personal project management with direct file system access.
 
 ```bash
 # 1. Download latest release
-wget https://github.com/Onix-Systems/Fira/releases/download/v1.0.0/fira-v1.0.0.zip
-unzip fira-v1.0.0.zip
-cd fira-v1.0.0
+wget https://github.com/Onix-Systems/Fira/releases/download/v1.0.1/fira-v1.0.1.zip
+unzip fira-v1.0.1.zip
+cd fira-v1.0.1
 
 # 2. Choose startup method:
 
@@ -63,15 +63,13 @@ start.bat     # Windows
 
 ### Docker Deployment
 
-**[📖 Complete Docker Deployment Guide](fira/docker-deploy/README.md)**
-
 Quick Docker setup:
 
 ```bash
 # 1. Download latest release
-wget https://github.com/Onix-Systems/Fira/releases/download/v1.0.0/fira-v1.0.0.zip
-unzip fira-v1.0.0.zip
-cd fira-v1.0.0
+wget https://github.com/Onix-Systems/Fira/releases/download/v1.0.1/fira-v1.0.1.zip
+unzip fira-v1.0.1.zip
+cd fira-v1.0.1
 
 # 2. Build and run
 cd fira/docker-deploy
@@ -90,78 +88,5 @@ The Docker deployment includes:
 For production deployment, Kubernetes, CI/CD pipelines, and troubleshooting, see the [Docker Deployment Guide](fira/docker-deploy/README.md).
 
 
-## CI/CD and Deployment
-
-### GitLab CI/CD Setup
-
-Configure `.gitlab-ci.yml` variables in your GitLab project:
-
-```yaml
-# Required Variables
-BUILD_DOCKER_IMAGE: "docker:20.10.16"
-DEPLOY_DOCKER_IMAGE: "your-deploy-image"
-DOCKER_REPOSITORY_IMAGE: "your-registry/fira:latest"
-K8S_NAMESPACE: "your-namespace"
-K8S_HOSTNAME: "fira.yourdomain.com"
-CONTAINER_PORT: "8080"
-```
-
-### Kubernetes Deployment
-
-1. **Configure environment secrets:**
-   ```bash
-   kubectl create secret generic env-secrets \
-     --from-literal=FIRA_REQUIRE_LOGIN=true \
-     --from-literal=FIRA_PORT=8001 \
-     -n your-namespace
-   ```
-
-2. **Setup Docker registry access:**
-   ```bash
-   kubectl create secret docker-registry gitlab-registry \
-     --docker-server=your-registry.com \
-     --docker-username=your-username \
-     --docker-password=your-token \
-     -n your-namespace
-   ```
-
-3. **Deploy:**
-   ```bash
-   # Apply deployment configuration
-   envsubst < deployment.yml | kubectl apply -f -
-   
-   # Check status
-   kubectl get pods -n your-namespace
-   kubectl get ingress -n your-namespace
-   ```
-
-## Project Structure
-
-```
-fira/
-├── web/                    # Server-based application with authentication and multi-user support
-├── local/                  # File-based application for offline use with direct file system access
-├── docker-deploy/          # Production Docker deployment with Nginx reverse proxy
-├── .gitlab-ci.yml         # CI/CD pipeline configuration
-├── deployment.yml         # Kubernetes deployment template
-├── docker-compose.yml     # Development Docker setup
-└── docker-compose.prod.yml # Production Docker setup
-```
-
-## Mode Comparison
-
-| Feature | Local Mode | Web Mode |
-|---------|---------------|-------------|
-| **Setup** | Open HTML file | Start Python server |
-| **Authentication** | None | User accounts & roles |
-| **Storage** | Direct file system | Server-managed files |
-| **Collaboration** | File sharing only | Real-time team features |
-| **Internet Required** | No | Yes (for server) |
-| **Best for** | Personal projects | Team projects |
-| **Browser Support** | Chrome/Edge 86+ | All modern browsers |
-
-
 ## Support
-
-- Create an issue in this repository
 - Contact: denys.kramar@onix-systems.com
