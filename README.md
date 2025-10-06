@@ -25,41 +25,35 @@ Fira offers three deployment modes:
 
 Perfect for personal project management with direct file system access.
 
-```bash
-# 1. Download latest release
-wget https://github.com/Onix-Systems/Fira/releases/download/v1.0.1/fira-v1.0.1.zip
-unzip fira-v1.0.1.zip
-cd fira-v1.0.1
+**Quick Start:**
 
-# 2. Choose startup method:
+1. **Download Fira**
+   ```bash
+   # Download the latest release and extract it
+   wget https://github.com/Onix-Systems/Fira/releases/download/v1.0.1/fira-v1.0.1.zip
+   unzip fira-v1.0.1.zip
+   cd fira-v1.0.1
+   ```
 
-# Option A: Direct file access (fira/local)
-cd fira/local
-# Open index.html directly in Chrome/Edge 86+
+2. **Open Fira in your browser**
+   ```bash
+   cd fira/local
+   # Simply double-click index.html to open it in your web browser
+   # Alternative: Right-click on index.html → "Open with" → Choose your preferred browser
+   ```
 
-# Option B: Simple server (fira/local)
-cd fira/local
-./start.sh    # Linux/Mac
-start.bat     # Windows
-# Then visit http://localhost:8080
-```
+3. **Choose your projects folder**
+   - Click the "Choose Folder" button in Fira
+   - Select where you want to store your projects
+   - Uses modern File System Access API - works directly with your local files!
 
 **Requirements:** Chrome/Edge 86+ (uses File System Access API)
 
 **How it works:**
-- **Option A**: Direct file access - open index.html in browser, click "Choose Folder" to select projects directory
-- **Option B**: Simple server - starts local HTTP server, works with any modern browser
+- Direct file access - no server needed
 - Projects stored as folders with markdown task files
-- Works completely offline, no server needed
+- Works completely offline
 - Direct file system access for easy backup/sync
-
-**Requirements:** Python 3.7+
-
-**How it works:**
-- Python HTTP server with REST API
-- User authentication and role management
-- Projects stored in `fira/web/projects/` directory
-- Team collaboration features
 
 ### Docker Deployment
 
