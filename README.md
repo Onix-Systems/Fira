@@ -11,6 +11,18 @@ Fira offers three deployment modes:
 - **Local Mode** - Offline file-based project management for personal use
 - **Docker Deploy** - Production deployment with Nginx reverse proxy and containerization
 
+## Supported Platforms
+
+**Browser Support:**
+- **Web Mode**: All modern browsers with ES6+ support (Chrome, Firefox, Safari, Edge)
+- **Local Mode**: Chrome 86+, Edge 86+ (requires File System Access API)
+- **Mobile**: Responsive design works on tablets and mobile browsers
+
+**Operating Systems:**
+- **Server**: Linux, macOS, Windows (Python 3.6+)
+- **Docker**: Linux (any Docker-compatible system)
+- **Client**: Any OS with a supported browser
+
 ## Features
 
 - **Kanban Boards** - Organize tasks across workflow columns (Backlog → Progress → Review → Testing → Done)
@@ -21,59 +33,73 @@ Fira offers three deployment modes:
 
 ## Quick Start
 
-1. **Download Fira**
-   ```bash
-   # Download the latest release and extract it
-   wget https://github.com/Onix-Systems/Fira/releases/download/v1.0.2/fira-v1.0.2.zip
-   unzip fira-v1.0.2.zip
-   cd fira-v1.0.2
-   ```
+Choose your deployment mode:
 
-2. **Open Fira in your browser**
-   ```bash
-   cd fira/local
-   # Simply double-click index.html to open it in your web browser
-   # Alternative: Right-click on index.html → "Open with" → Choose your preferred browser
-   ```
+### Local Mode (Personal Use)
 
-3. **Choose your projects folder**
-   - Click the "Choose Folder" button in Fira
-   - Select where you want to store your projects
-   - Uses modern File System Access API - works directly with your local files!
-
-**Requirements:** Chrome/Edge 86+ (uses File System Access API)
-
-**How it works:**
-- Direct file access - no server needed
-- Projects stored as folders with markdown task files
-- Works completely offline
-- Direct file system access for easy backup/sync
-
-### Docker Deployment
-
-Quick Docker setup:
+Perfect for offline project management with direct file system access.
 
 ```bash
-# 1. Download latest release
+# 1. Download and extract
 wget https://github.com/Onix-Systems/Fira/releases/download/v1.0.2/fira-v1.0.2.zip
 unzip fira-v1.0.2.zip
-cd fira-v1.0.2
+cd fira-v1.0.2/fira/local
+
+# 2. Open index.html in Chrome/Edge 86+
+
+# 3. Click "Choose Folder" and select your projects directory
+```
+
+**Requirements:** Chrome/Edge 86+ (File System Access API)
+
+---
+
+### Web Mode (Local Server)
+
+Server-based for local development without authentication.
+
+```bash
+# 1. Download and extract
+wget https://github.com/Onix-Systems/Fira/releases/download/v1.0.2/fira-v1.0.2.zip
+unzip fira-v1.0.2.zip
+cd fira-v1.0.2/fira/web
+
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. Start server
+./start.sh      # Linux/Mac
+start.bat       # Windows
+
+# 4. Browser opens automatically at http://localhost:8080
+```
+
+**Requirements:** Python 3.6+, modern browser
+
+**Detailed guide:** [Start Localhost Server](https://github.com/Onix-Systems/Fira/wiki/Start-Localhost-Server)
+
+---
+
+### Docker Deployment (Production)
+
+Containerized deployment with Nginx reverse proxy.
+
+```bash
+# 1. Download and extract
+wget https://github.com/Onix-Systems/Fira/releases/download/v1.0.2/fira-v1.0.2.zip
+unzip fira-v1.0.2.zip
+cd fira-v1.0.2/fira/docker-deploy
 
 # 2. Build and run
-cd fira/docker-deploy
 docker build -t fira-web .
 docker run -p 8080:80 fira-web
 
 # 3. Access at http://localhost:8080
 ```
 
-The Docker deployment includes:
-- **Nginx**: Reverse proxy + static file serving
-- **Python Backend**: API server on port 8001
-- **Supervisor**: Process management
-- **Production optimizations**: Caching, compression, health checks
+**Requirements:** Docker
 
-For production deployment, Kubernetes, CI/CD pipelines, and troubleshooting, see the [Docker Deployment Guide](fira/docker-deploy/README.md).
+**Detailed guide:** [Deployment](https://github.com/Onix-Systems/Fira/wiki/Deployment) (includes Kubernetes and CI/CD setup)
 
 
 ## Support
