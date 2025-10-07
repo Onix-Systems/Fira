@@ -24,9 +24,9 @@ Fira offers three deployment modes:
 1. **Download Fira**
    ```bash
    # Download the latest release and extract it
-   wget https://github.com/Onix-Systems/Fira/releases/download/v1.0.1/fira-v1.0.1.zip
-   unzip fira-v1.0.1.zip
-   cd fira-v1.0.1
+   wget https://github.com/Onix-Systems/Fira/releases/download/v1.0.2/fira-v1.0.2.zip
+   unzip fira-v1.0.2.zip
+   cd fira-v1.0.2
    ```
 
 2. **Open Fira in your browser**
@@ -55,9 +55,9 @@ Quick Docker setup:
 
 ```bash
 # 1. Download latest release
-wget https://github.com/Onix-Systems/Fira/releases/download/v1.0.1/fira-v1.0.1.zip
-unzip fira-v1.0.1.zip
-cd fira-v1.0.1
+wget https://github.com/Onix-Systems/Fira/releases/download/v1.0.2/fira-v1.0.2.zip
+unzip fira-v1.0.2.zip
+cd fira-v1.0.2
 
 # 2. Build and run
 cd fira/docker-deploy
