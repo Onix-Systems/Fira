@@ -21,12 +21,6 @@ Fira offers three deployment modes:
 
 ## Quick Start
 
-### Local Mode
-
-Perfect for personal project management with direct file system access.
-
-**Quick Start:**
-
 1. **Download Fira**
    ```bash
    # Download the latest release and extract it
