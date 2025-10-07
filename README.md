@@ -7,7 +7,7 @@
 Visual Kanban project management with task tracking and team collaboration.
 
 Fira offers three deployment modes:
-- **Web Mode** - Server-based with user authentication and team collaboration
+- **Web Mode** - Server-based for local development and team collaboration
 - **Local Mode** - Offline file-based project management for personal use
 - **Docker Deploy** - Production deployment with Nginx reverse proxy and containerization
 
@@ -41,9 +41,9 @@ Perfect for offline project management with direct file system access.
 
 ```bash
 # 1. Download and extract
-wget https://github.com/Onix-Systems/Fira/releases/download/v1.0.2/fira-v1.0.2.zip
-unzip fira-v1.0.2.zip
-cd fira-v1.0.2/fira/local
+wget https://github.com/Onix-Systems/Fira/releases/latest/download/fira.zip
+unzip fira.zip
+cd fira/local
 
 # 2. Open index.html in Chrome/Edge 86+
 
@@ -60,9 +60,9 @@ Server-based for local development without authentication.
 
 ```bash
 # 1. Download and extract
-wget https://github.com/Onix-Systems/Fira/releases/download/v1.0.2/fira-v1.0.2.zip
-unzip fira-v1.0.2.zip
-cd fira-v1.0.2/fira/web
+wget https://github.com/Onix-Systems/Fira/releases/latest/download/fira.zip
+unzip fira.zip
+cd fira/web
 
 # 2. Install dependencies
 pip install -r requirements.txt
@@ -86,9 +86,9 @@ Containerized deployment with Nginx reverse proxy.
 
 ```bash
 # 1. Download and extract
-wget https://github.com/Onix-Systems/Fira/releases/download/v1.0.2/fira-v1.0.2.zip
-unzip fira-v1.0.2.zip
-cd fira-v1.0.2/fira/docker-deploy
+wget https://github.com/Onix-Systems/Fira/releases/latest/download/fira.zip
+unzip fira.zip
+cd fira/docker-deploy
 
 # 2. Build and run
 docker build -t fira-web .
