@@ -1,4 +1,3 @@
-
 [![Landing Site](https://img.shields.io/badge/Website-Landing%20Page-blue?logo=web)](https://onix-systems-android-tasks.dev.onix.team/landing/index.html)
 [![Wiki](https://img.shields.io/badge/Wiki-GitHub%20Wiki-green?logo=tools)](https://github.com/Onix-Systems/Fira/wiki)
 
@@ -16,12 +15,10 @@ Fira offers three deployment modes:
 **Browser Support:**
 - **Web Mode**: All modern browsers with ES6+ support (Chrome, Firefox, Safari, Edge)
 - **Local Mode**: Chrome 86+, Edge 86+ (requires File System Access API)
-- **Mobile**: Responsive design works on tablets and mobile browsers
 
 **Operating Systems:**
 - **Server**: Linux, macOS, Windows (Python 3.6+)
 - **Docker**: Linux (any Docker-compatible system)
-- **Client**: Any OS with a supported browser
 
 ## Features
 
@@ -38,7 +35,6 @@ Choose your deployment mode:
 ### Local Mode (Personal Use)
 
 Perfect for offline project management with direct file system access.
-
 ```bash
 # 1. Download and extract
 wget https://github.com/Onix-Systems/Fira/releases/latest/download/fira.zip
@@ -76,7 +72,7 @@ start.bat       # Windows
 
 **Requirements:** Python 3.6+, modern browser
 
-**Detailed guide:** [Start Localhost Server](https://github.com/Onix-Systems/Fira/wiki/Start-Localhost-Server)
+**Detailed guide:** https://github.com/Onix-Systems/Fira/wiki/Start-Localhost-Server
 
 ---
 
@@ -99,7 +95,7 @@ docker run -p 8080:80 fira-web
 
 **Requirements:** Docker
 
-**Detailed guide:** [Deployment](https://github.com/Onix-Systems/Fira/wiki/Deployment) (includes Kubernetes and CI/CD setup)
+**Detailed guide:** https://github.com/Onix-Systems/Fira/wiki/Deployment (includes Kubernetes and CI/CD setup)
 
 
 ## Support
