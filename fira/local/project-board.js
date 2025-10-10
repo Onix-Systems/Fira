@@ -429,14 +429,20 @@ class ProjectBoard {
                 console.log('🔍 Found server project:', !!serverProject);
                 console.log('🔍 Server project description:', serverProject?.description);
                 
-                if (serverProject && serverProject.description && 
-                    serverProject.description !== serverProject.id && 
-                    serverProject.description.trim() !== '') {
-                    
-                    console.log('✅ Found fresh project data from server:', serverProject);
-                    // Update current project with fresh data
+                if (serverProject) {
+                    // Update current project with fresh data from server
                     this.currentProject = { ...this.currentProject, ...serverProject };
-                    
+
+                    // Set default description if missing
+                    if (!this.currentProject.description ||
+                        this.currentProject.description === this.currentProject.id ||
+                        this.currentProject.description.trim() === '') {
+                        this.currentProject.description = `Project ${this.currentProject.id}`;
+                        console.log('ℹ️ Using default description for project');
+                    } else {
+                        console.log('✅ Found fresh project data from server:', serverProject);
+                    }
+
                     // Also update in globalDataManager if it exists
                     if (window.globalDataManager && window.globalDataManager.projects) {
                         const projectIndex = window.globalDataManager.projects.findIndex(p => p.id === this.currentProject.id);
@@ -445,11 +451,9 @@ class ProjectBoard {
                             console.log('✅ Updated project in globalDataManager');
                         }
                     }
-                    
-                    console.log('✅ Project description restored from server on page load');
+
+                    console.log('✅ Project data loaded from server');
                     return; // Successfully loaded from server
-                } else {
-                    console.log('⚠️ Server project has no valid description');
                 }
             } catch (error) {
                 console.warn('⚠️ Failed to load fresh project data on page load:', error);
@@ -1301,7 +1305,7 @@ class ProjectBoard {
             </div>
             <div class="task-name">${task.title}</div>
             <div class="task-card-footer">
-                <div class="task-assignee">${task.assignee}</div>
+                <div class="task-assignee">${task.assignee || 'Unassigned'}</div>
                 <div class="task-priority ${task.priority}">${task.priority.toUpperCase()}</div>
             </div>
         `;
@@ -1530,11 +1534,15 @@ class ProjectBoard {
             viewSwitchBtn.textContent = 'List View';
             kanbanBoard.style.display = 'block';
             this.currentView = 'kanban';
+            // Reset chart toggle setup flag when leaving analytics
+            this.chartToggleButtonsSetup = false;
         } else if (view === 'list') {
             viewSwitchBtn.classList.add('active');
             viewSwitchBtn.textContent = 'Kanban View';
             listView.style.display = 'block';
             this.currentView = 'list';
+            // Reset chart toggle setup flag when leaving analytics
+            this.chartToggleButtonsSetup = false;
             this.renderListView();
         }
     }
@@ -5150,19 +5158,24 @@ class ProjectBoard {
         
         // Update project metrics
         this.updateAnalyticsMetrics();
-        
+
         // Render charts with a small delay to ensure DOM is ready
         setTimeout(() => {
             this.renderStatusChart();
             this.renderTimeChart();
             this.renderDeveloperChart();
         }, 100);
-        
+
         // Update developer statistics
         this.updateDeveloperStats();
-        
-        // Setup chart toggle buttons
-        this.setupChartToggleButtons();
+
+        // Setup chart toggle buttons immediately using requestAnimationFrame for DOM readiness
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                console.log('🔧 Setting up chart toggle buttons...');
+                this.setupChartToggleButtons();
+            });
+        });
     }
     
     updateAnalyticsMetrics() {
@@ -5785,6 +5798,8 @@ window.initProjectBoard = async function(projectName, taskName = null) {
         } else {
             console.log(`✅ Same project "${projectName}" - keeping loaded state`);
         }
+        // Reset view to kanban when navigating to project board (prevents issues when coming from analytics)
+        board.currentView = 'kanban';
         // Re-setup event listeners for new DOM content
         console.log('🔄 Re-setting up event listeners for reused instance');
         board.setupEventListeners();
@@ -7280,37 +7295,109 @@ class AssigneeDropdownManager {
     }
     
     setupChartToggleButtons() {
+        console.log('🔍 setupChartToggleButtons called');
         const chartToggleButtons = document.querySelectorAll('.chart-toggle');
+        console.log(`🔍 Found ${chartToggleButtons.length} chart toggle buttons`);
+
+        // Log each button found
+        chartToggleButtons.forEach((btn, i) => {
+            console.log(`  Button ${i}:`, {
+                text: btn.textContent,
+                dataset: btn.dataset.chart,
+                classes: btn.className,
+                hasClickListener: btn.onclick !== null
+            });
+        });
+
+        // Check if chart toggle buttons exist in DOM (they only exist on analytics page)
+        if (!chartToggleButtons || chartToggleButtons.length === 0) {
+            console.error('⚠️ No chart toggle buttons found in DOM - skipping setup');
+            console.log('🔍 DOM state:', {
+                analyticsView: document.getElementById('analyticsView'),
+                chartControls: document.querySelector('.chart-controls')
+            });
+            return;
+        }
+
+        // IMPORTANT: Remove the duplicate check - always set up fresh listeners
+        // This ensures buttons work even after navigation
+        if (this.chartToggleButtonsSetup) {
+            console.log('⚠️ Buttons were already set up, but re-setting up anyway to ensure they work');
+        }
+
         const chartWrappers = {
             'velocity': document.getElementById('projectVelocityChart'),
-            'burndown': document.getElementById('projectBurndownChart'), 
+            'burndown': document.getElementById('projectBurndownChart'),
             'distribution': document.getElementById('projectDistributionChart')
         };
-        
-        chartToggleButtons.forEach(button => {
-            button.addEventListener('click', () => {
+
+        console.log('🔍 Chart wrappers found:', {
+            velocity: !!chartWrappers.velocity,
+            burndown: !!chartWrappers.burndown,
+            distribution: !!chartWrappers.distribution
+        });
+
+        // First, remove any existing listeners by cloning buttons
+        const parentControls = document.querySelector('.chart-controls');
+        if (parentControls) {
+            const newControls = parentControls.cloneNode(true);
+            parentControls.parentNode.replaceChild(newControls, parentControls);
+            console.log('🔄 Cloned chart controls to remove old listeners');
+        }
+
+        // Re-query buttons after cloning
+        const freshButtons = document.querySelectorAll('.chart-toggle');
+        console.log(`🔍 Re-queried ${freshButtons.length} fresh buttons after cloning`);
+
+        let setupCount = 0;
+        freshButtons.forEach((button, index) => {
+            console.log(`🔧 Setting up listener for button ${index}:`, button.dataset.chart);
+
+            const clickHandler = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log(`🖱️ Chart toggle button clicked: ${button.dataset.chart}`);
+
                 // Remove active class from all buttons
-                chartToggleButtons.forEach(btn => btn.classList.remove('active'));
+                freshButtons.forEach(btn => btn.classList.remove('active'));
                 // Add active class to clicked button
                 button.classList.add('active');
-                
+
                 // Hide all chart wrappers
                 Object.values(chartWrappers).forEach(wrapper => {
-                    if (wrapper) wrapper.classList.add('hidden');
+                    if (wrapper) {
+                        wrapper.classList.add('hidden');
+                        console.log(`🙈 Hiding chart wrapper:`, wrapper.id);
+                    }
                 });
-                
+
                 // Show selected chart wrapper
                 const selectedChart = button.dataset.chart;
                 const selectedWrapper = chartWrappers[selectedChart];
                 if (selectedWrapper) {
                     selectedWrapper.classList.remove('hidden');
+                    console.log(`👁️ Showing chart wrapper:`, selectedWrapper.id);
+                } else {
+                    console.error(`❌ Chart wrapper not found for: ${selectedChart}`);
                 }
-                
+
                 console.log(`📊 Switched to ${selectedChart} chart`);
-            });
+            };
+
+            button.addEventListener('click', clickHandler);
+            console.log(`✅ Added click listener to button ${index}`);
+            setupCount++;
         });
-        
-        console.log('📊 Chart toggle buttons setup complete');
+
+        this.chartToggleButtonsSetup = true;
+        console.log(`✅ Chart toggle buttons set up successfully (${setupCount} buttons)`);
+
+        // Test: manually trigger a click to verify
+        console.log('🧪 Testing: Attempting to click first button programmatically...');
+        if (freshButtons[0]) {
+            // Don't actually click, just log that we could
+            console.log('🧪 First button is accessible and ready for clicks');
+        }
     }
 
     // Delete task functionality

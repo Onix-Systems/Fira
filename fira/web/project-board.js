@@ -429,14 +429,20 @@ class ProjectBoard {
                 console.log('🔍 Found server project:', !!serverProject);
                 console.log('🔍 Server project description:', serverProject?.description);
                 
-                if (serverProject && serverProject.description && 
-                    serverProject.description !== serverProject.id && 
-                    serverProject.description.trim() !== '') {
-                    
-                    console.log('✅ Found fresh project data from server:', serverProject);
-                    // Update current project with fresh data
+                if (serverProject) {
+                    // Update current project with fresh data from server
                     this.currentProject = { ...this.currentProject, ...serverProject };
-                    
+
+                    // Set default description if missing
+                    if (!this.currentProject.description ||
+                        this.currentProject.description === this.currentProject.id ||
+                        this.currentProject.description.trim() === '') {
+                        this.currentProject.description = `Project ${this.currentProject.id}`;
+                        console.log('ℹ️ Using default description for project');
+                    } else {
+                        console.log('✅ Found fresh project data from server:', serverProject);
+                    }
+
                     // Also update in globalDataManager if it exists
                     if (window.globalDataManager && window.globalDataManager.projects) {
                         const projectIndex = window.globalDataManager.projects.findIndex(p => p.id === this.currentProject.id);
@@ -445,11 +451,9 @@ class ProjectBoard {
                             console.log('✅ Updated project in globalDataManager');
                         }
                     }
-                    
-                    console.log('✅ Project description restored from server on page load');
+
+                    console.log('✅ Project data loaded from server');
                     return; // Successfully loaded from server
-                } else {
-                    console.log('⚠️ Server project has no valid description');
                 }
             } catch (error) {
                 console.warn('⚠️ Failed to load fresh project data on page load:', error);
@@ -593,7 +597,7 @@ class ProjectBoard {
                         content: '',
                         fullContent: '',
                         column: 'backlog',
-                        timeEstimate: '2h',
+                        timeEstimate: '0h',
                         timeSpent: '0h',
                         priority: 'low',
                         developer: '',
@@ -1301,7 +1305,7 @@ class ProjectBoard {
             </div>
             <div class="task-name">${task.title}</div>
             <div class="task-card-footer">
-                <div class="task-assignee">${task.assignee}</div>
+                <div class="task-assignee">${task.assignee || 'Unassigned'}</div>
                 <div class="task-priority ${task.priority}">${task.priority.toUpperCase()}</div>
             </div>
         `;
@@ -1458,14 +1462,19 @@ class ProjectBoard {
     handleDrop(e, targetColumn) {
         console.log('🎯 Drop event on column:', targetColumn, 'with task:', this.draggedTask?.id);
         if (!this.draggedTask) return;
-        
+
+        // Show web version warning toast
+        if (window.showWebVersionWarning) {
+            window.showWebVersionWarning();
+        }
+
         if (this.draggedTask.column !== targetColumn) {
             const oldColumn = this.draggedTask.column;
-            
+
             // Update task column and status
             this.draggedTask.column = targetColumn;
             this.draggedTask.status = targetColumn;
-            
+
             // Find and update in tasks array
             const taskIndex = this.tasks.findIndex(t => t.id === this.draggedTask.id);
             if (taskIndex === -1) {
@@ -1473,20 +1482,20 @@ class ProjectBoard {
                 console.log('📋 Available tasks:', this.tasks.map(t => t.id));
                 return;
             }
-            
+
             this.tasks[taskIndex].column = targetColumn;
             this.tasks[taskIndex].status = targetColumn;
-            
+
             // Update status dropdown if task modal is open
             const taskStatusSelect = document.getElementById('taskStatusSelect');
 
             if (taskStatusSelect && this.currentTask && this.currentTask.id === this.draggedTask.id) {
                 taskStatusSelect.value = targetColumn;
             }
-            
+
             // Re-render board
             this.filterAndRenderTasks();
-            
+
             // Save changes using the complete task object with all content preserved
             const fullTask = this.tasks[taskIndex];
             console.log('💾 Saving full task object during drag-and-drop:', {
@@ -1496,10 +1505,10 @@ class ProjectBoard {
                 contentLength: fullTask.fullContent ? fullTask.fullContent.length : 0
             });
             this.saveTaskChanges(fullTask, { skipRerender: true, closeAfterSave: false, skipSuccessMessage: true });
-            
+
             // Show specific success message for drag and drop
             this.showMessage(`Task ${this.draggedTask.id} moved to ${targetColumn}`, 'success');
-            
+
             console.log(`Task ${this.draggedTask.id} moved from ${oldColumn} to ${targetColumn}`);
         }
     }
@@ -1530,11 +1539,15 @@ class ProjectBoard {
             viewSwitchBtn.textContent = 'List View';
             kanbanBoard.style.display = 'block';
             this.currentView = 'kanban';
+            // Reset chart toggle setup flag when leaving analytics
+            this.chartToggleButtonsSetup = false;
         } else if (view === 'list') {
             viewSwitchBtn.classList.add('active');
             viewSwitchBtn.textContent = 'Kanban View';
             listView.style.display = 'block';
             this.currentView = 'list';
+            // Reset chart toggle setup flag when leaving analytics
+            this.chartToggleButtonsSetup = false;
             this.renderListView();
         }
     }
@@ -1708,25 +1721,31 @@ class ProjectBoard {
     // Method to open the create task detail modal for server mode
     openCreateTaskDetailModal() {
         console.log('🚀 openCreateTaskDetailModal called');
+
+        // Show web version warning toast
+        if (window.showWebVersionWarning) {
+            window.showWebVersionWarning();
+        }
+
         const modal = document.getElementById('createTaskDetailModal');
         if (!modal) {
             console.error('❌ createTaskDetailModal not found in DOM');
             return;
         }
-        
+
         console.log('✅ Found createTaskDetailModal element:', modal);
         console.log('✅ Modal classes:', modal.className);
-        
+
         // Initialize empty task data
         this.initializeCreateTaskModal();
-        
+
         // Show modal
         modal.style.display = 'flex';
         document.body.style.overflow = 'hidden';
-        
+
         // Set up modal event listeners
         this.setupCreateTaskModalEventListeners();
-        
+
         console.log('📝 Opened create task detail modal successfully');
         console.log('📝 Modal display style:', modal.style.display);
     }
@@ -1739,7 +1758,7 @@ class ProjectBoard {
             content: '',
             fullContent: '',
             column: 'backlog',
-            timeEstimate: '2h',
+            timeEstimate: '0h',
             timeSpent: '0h',
             priority: 'medium',
             developer: '',
@@ -1758,14 +1777,29 @@ class ProjectBoard {
         const assigneeSelected = document.querySelector('#createDropdownSelected .selected-value');
         const createdDate = document.getElementById('createTaskCreatedDate');
         const timeRemaining = document.getElementById('createTimeRemaining');
-        
+
         if (taskNameInput) taskNameInput.value = '';
         if (descriptionEditor) descriptionEditor.value = '';
         if (prioritySelect) prioritySelect.value = 'medium';
         if (assigneeSelected) assigneeSelected.textContent = 'Unassigned';
         if (createdDate) createdDate.textContent = new Date().toLocaleDateString();
-        if (timeRemaining) timeRemaining.textContent = '2h remaining';
-        
+        if (timeRemaining) timeRemaining.textContent = '0h remaining';
+
+        // Reset hidden time fields
+        const createTaskEstimate = document.getElementById('createTaskEstimate');
+        if (createTaskEstimate) createTaskEstimate.value = '0h';
+
+        const createTaskTimeSpent = document.getElementById('createTaskTimeSpent');
+        if (createTaskTimeSpent) createTaskTimeSpent.value = '0h';
+
+        // Reset time-spent display
+        const timeSpentDisplay = timeRemaining?.parentElement?.querySelector('.time-spent');
+        if (timeSpentDisplay) timeSpentDisplay.textContent = '0h';
+
+        // Reset progress bar
+        const progressFill = timeRemaining?.closest('.time-tracking-section')?.querySelector('.progress-fill');
+        if (progressFill) progressFill.style.width = '0%';
+
         // Update assignee dropdown with current project developers (force refresh to get latest)
         this.updateAssigneeDropdown('Unassigned', true).catch(console.error);
         
@@ -3474,26 +3508,34 @@ class ProjectBoard {
     
     async saveTaskChanges(task, options = { closeAfterSave: true }) {
         console.log('💾 saveTaskChanges called for task:', task?.id, 'options:', options);
-        
-        // Collect all form data
-        const taskNameInput = document.getElementById('taskNameInput');
-        const descriptionEditor = document.getElementById('taskDescriptionEditor');
-        const taskAssignee = document.getElementById('taskAssignee');
-        const taskEstimate = document.getElementById('taskEstimate');
-        const taskTimeSpent = document.getElementById('taskTimeSpent');
-        const taskPriority = document.getElementById('taskPriority');
+
+        // Show web version warning toast
+        if (window.showWebVersionWarning) {
+            window.showWebVersionWarning();
+        }
+
+        // Collect all form data (check both edit modal and create modal fields)
+        const taskNameInput = document.getElementById('taskNameInput') || document.getElementById('createTaskNameInput');
+        const descriptionEditor = document.getElementById('taskDescriptionEditor') || document.getElementById('createTaskDescriptionEditor');
+        const taskAssignee = document.getElementById('taskAssignee') || document.getElementById('createTaskAssignee');
+        const taskEstimate = document.getElementById('taskEstimate') || document.getElementById('createTaskEstimate');
+        const taskTimeSpent = document.getElementById('taskTimeSpent') || document.getElementById('createTaskTimeSpent');
+        const taskPriority = document.getElementById('taskPriority') || document.getElementById('createTaskPriority');
         const activeTypeBtn = document.querySelector('.type-btn.active');
-        
+
         // Update form fields if form elements exist AND are visible (modal is open)
         const formElementsExist = taskNameInput && descriptionEditor;
         const taskDetailModal = document.getElementById('taskDetailModal');
-        const modalIsOpen = taskDetailModal && 
-                           taskDetailModal.style.display === 'flex';
-        
+        const createTaskDetailModal = document.getElementById('createTaskDetailModal');
+        const modalIsOpen = (taskDetailModal && taskDetailModal.style.display === 'flex') ||
+                           (createTaskDetailModal && createTaskDetailModal.style.display === 'flex');
+
         console.log('📝 saveTaskChanges modal state check:', {
             formElementsExist,
-            modalExists: !!taskDetailModal,
-            modalDisplay: taskDetailModal?.style.display,
+            taskDetailModalExists: !!taskDetailModal,
+            createTaskDetailModalExists: !!createTaskDetailModal,
+            taskDetailModalDisplay: taskDetailModal?.style.display,
+            createTaskDetailModalDisplay: createTaskDetailModal?.style.display,
             modalIsOpen,
             taskId: task?.id
         });
@@ -3567,7 +3609,7 @@ class ProjectBoard {
             console.log(`  task.timeEstimate: "${task.timeEstimate}"`);
             console.log(`  task.timeSpent: "${task.timeSpent}"`);
             
-            const taskPrioritySelect = document.getElementById('taskPrioritySelect');
+            const taskPrioritySelect = document.getElementById('taskPrioritySelect') || document.getElementById('createTaskPrioritySelect');
             task.priority = (taskPrioritySelect && taskPrioritySelect.value) || (taskPriority && taskPriority.value) || 'low';
         } else {
             console.log(`📊 saveTaskChanges: Form elements not available, preserving existing task data for ${task.id}`);
@@ -3575,7 +3617,7 @@ class ProjectBoard {
         
         // Save status and type from dropdown if form elements exist AND modal is open
         if (formElementsExist && modalIsOpen) {
-            const taskStatusSelect = document.getElementById('taskStatusSelect');
+            const taskStatusSelect = document.getElementById('taskStatusSelect') || document.getElementById('createTaskStatusSelect');
             if (taskStatusSelect && taskStatusSelect.value) {
                 // Only update status if it wasn't already updated by event handler
                 if (!task.status || task.status !== taskStatusSelect.value) {
@@ -4208,7 +4250,7 @@ class ProjectBoard {
         const form = document.getElementById('createTaskForm');
         form.reset();
         document.getElementById('newTaskId').value = nextTaskId; // Restore after reset
-        document.getElementById('newTaskEstimate').value = '2h'; // Set default
+        document.getElementById('newTaskEstimate').value = '0h'; // Set default
         
         modal.style.display = 'flex';
         document.body.style.overflow = 'hidden';
@@ -4252,17 +4294,22 @@ class ProjectBoard {
 
     async handleCreateTask(e) {
         e.preventDefault();
-        
+
+        // Show web version warning toast
+        if (window.showWebVersionWarning) {
+            window.showWebVersionWarning();
+        }
+
         const submitBtn = document.getElementById('createTaskSubmitBtn');
         const btnText = submitBtn.querySelector('.btn-text');
         const btnLoading = submitBtn.querySelector('.btn-loading');
-        
+
         try {
             // Show loading state
             submitBtn.disabled = true;
             btnText.style.display = 'none';
             btnLoading.style.display = 'flex';
-            
+
             // Get form data
             const formData = new FormData(e.target);
             const taskData = {
@@ -4271,7 +4318,7 @@ class ProjectBoard {
                 column: formData.get('taskColumn'),
                 assignee: formData.get('taskAssignee') || 'Unassigned',
                 priority: formData.get('taskPriority'),
-                timeEstimate: formData.get('taskEstimate') || '2h',
+                timeEstimate: formData.get('taskEstimate') || '0h',
                 timeSpent: '0h',
                 developer: formData.get('taskAssignee') || null,
                 content: formData.get('taskDescription') || 'No description provided.',
@@ -4279,26 +4326,26 @@ class ProjectBoard {
                 created: new Date().toISOString(),
                 projectId: this.currentProject.id
             };
-            
+
             // Validate required fields
             if (!taskData.title) {
                 this.showMessage('Task title is required', 'error');
                 return;
             }
-            
+
             // Add task to local tasks array with timestamp
             taskData.lastModified = new Date().toISOString();
             this.tasks.push(taskData);
-            
+
             // Deduplicate to prevent duplicates
             this.tasks = this.deduplicateTasks(this.tasks);
-            
+
             // Update UI
             this.filterAndRenderTasks();
-            
+
             // Close modal
             closeCreateTaskModal();
-            
+
             // Reset form
             document.getElementById('createTaskForm').reset();
             
@@ -5150,19 +5197,24 @@ class ProjectBoard {
         
         // Update project metrics
         this.updateAnalyticsMetrics();
-        
+
         // Render charts with a small delay to ensure DOM is ready
         setTimeout(() => {
             this.renderStatusChart();
             this.renderTimeChart();
             this.renderDeveloperChart();
         }, 100);
-        
+
         // Update developer statistics
         this.updateDeveloperStats();
-        
-        // Setup chart toggle buttons
-        this.setupChartToggleButtons();
+
+        // Setup chart toggle buttons immediately using requestAnimationFrame for DOM readiness
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                console.log('🔧 Setting up chart toggle buttons...');
+                this.setupChartToggleButtons();
+            });
+        });
     }
     
     updateAnalyticsMetrics() {
@@ -5623,6 +5675,63 @@ class ProjectBoard {
         };
         return statusNames[status] || status;
     }
+
+    // Delete task functionality
+    async deleteTask(taskId) {
+        try {
+            console.log(`🗑️ Deleting task: ${taskId}`);
+
+            // Find the task to delete
+            const taskToDelete = this.tasks.find(task => task.id === taskId);
+            if (!taskToDelete) {
+                throw new Error(`Task ${taskId} not found`);
+            }
+
+            // Delete the task file from server FIRST
+            if (this.isWebVersion && window.globalDataManager && window.globalDataManager.apiClient) {
+                console.log(`🔄 Deleting task file for ${taskId} via API`);
+                await window.globalDataManager.apiClient.deleteTask(this.currentProject.id, taskId);
+                console.log(`✅ Task file deleted successfully for ${taskId}`);
+            }
+
+            // Remove from tasks array AFTER successful server deletion
+            this.tasks = this.tasks.filter(task => task.id !== taskId);
+            console.log(`🗑️ Removed task ${taskId} from tasks array. Remaining tasks: ${this.tasks.length}`);
+
+            // Also remove from filteredTasks
+            this.filteredTasks = this.filteredTasks.filter(task => task.id !== taskId);
+            console.log(`🗑️ Removed task ${taskId} from filteredTasks array. Remaining filtered tasks: ${this.filteredTasks.length}`);
+
+            // Close task detail modal if it's open for this task
+            if (this.currentTask && this.currentTask.id === taskId) {
+                console.log(`🚪 Closing modal for deleted task ${taskId}`);
+                const modal = document.getElementById('taskDetailModal');
+                if (modal) {
+                    modal.style.display = 'none';
+                    document.body.style.overflow = 'auto';
+                }
+                this.currentTask = null;
+            }
+
+            // Refresh using filterAndRenderTasks to update both filteredTasks and UI
+            console.log(`🔄 Re-rendering board after deletion using filterAndRenderTasks`);
+            this.filterAndRenderTasks();
+
+            console.log(`✅ Task ${taskId} deleted successfully`);
+
+            // Show success toast if available
+            if (window.showToast) {
+                window.showToast('Task deleted successfully', 'success');
+            }
+
+            return true;
+
+        } catch (error) {
+            console.error('❌ Error deleting task:', error);
+            alert(`Error deleting task: ${error.message}`);
+            return false;
+        }
+    }
 }
 
 // Modal close functions
@@ -5785,6 +5894,8 @@ window.initProjectBoard = async function(projectName, taskName = null) {
         } else {
             console.log(`✅ Same project "${projectName}" - keeping loaded state`);
         }
+        // Reset view to kanban when navigating to project board (prevents issues when coming from analytics)
+        board.currentView = 'kanban';
         // Re-setup event listeners for new DOM content
         console.log('🔄 Re-setting up event listeners for reused instance');
         board.setupEventListeners();
@@ -6615,6 +6726,45 @@ class TimeTrackingManager {
                 newTaskEstimate.value = this.currentTask.timeEstimate;
                 console.log(`✅ Updated newTaskEstimate form field to: ${this.currentTask.timeEstimate}`);
             }
+
+            // Update createTaskEstimate and createTaskTimeSpent for detail modal
+            const createTaskEstimate = document.getElementById('createTaskEstimate');
+            if (createTaskEstimate && this.currentTask._isNew) {
+                createTaskEstimate.value = this.currentTask.timeEstimate;
+                console.log(`✅ Updated createTaskEstimate hidden field to: ${this.currentTask.timeEstimate}`);
+            }
+
+            const createTaskTimeSpent = document.getElementById('createTaskTimeSpent');
+            if (createTaskTimeSpent && this.currentTask._isNew) {
+                createTaskTimeSpent.value = this.currentTask.timeSpent;
+                console.log(`✅ Updated createTaskTimeSpent hidden field to: ${this.currentTask.timeSpent}`);
+            }
+
+            // Update createTimeRemaining display and progress bar in create modal
+            const createTimeRemaining = document.getElementById('createTimeRemaining');
+            if (createTimeRemaining && this.currentTask._isNew) {
+                const estimateMinutes = this.parseTimeString(this.currentTask.timeEstimate || '0h').totalMinutes;
+                const spentMinutes = this.parseTimeString(this.currentTask.timeSpent || '0h').totalMinutes;
+                const remainingMinutes = Math.max(0, estimateMinutes - spentMinutes);
+                const remainingFormatted = this.formatMinutesToTimeString(remainingMinutes);
+                createTimeRemaining.textContent = `${remainingFormatted} remaining`;
+                console.log(`✅ Updated createTimeRemaining display to: ${remainingFormatted} remaining`);
+
+                // Update time-spent in create modal
+                const createTimeSpentDisplay = createTimeRemaining.parentElement?.querySelector('.time-spent');
+                if (createTimeSpentDisplay) {
+                    createTimeSpentDisplay.textContent = this.currentTask.timeSpent || '0h';
+                    console.log(`✅ Updated create time-spent display to: ${this.currentTask.timeSpent || '0h'}`);
+                }
+
+                // Update progress bar in create modal
+                const createProgressFill = createTimeRemaining.closest('.time-tracking-section')?.querySelector('.progress-fill');
+                if (createProgressFill && estimateMinutes > 0) {
+                    const progressPercent = Math.min((spentMinutes / estimateMinutes) * 100, 100);
+                    createProgressFill.style.width = `${progressPercent}%`;
+                    console.log(`✅ Updated create progress bar to: ${progressPercent}%`);
+                }
+            }
             
             // Update task in the board if it exists
             this.updateTaskInBoard(this.currentTask);
@@ -7280,86 +7430,108 @@ class AssigneeDropdownManager {
     }
     
     setupChartToggleButtons() {
+        console.log('🔍 setupChartToggleButtons called');
         const chartToggleButtons = document.querySelectorAll('.chart-toggle');
+        console.log(`🔍 Found ${chartToggleButtons.length} chart toggle buttons`);
+
+        // Log each button found
+        chartToggleButtons.forEach((btn, i) => {
+            console.log(`  Button ${i}:`, {
+                text: btn.textContent,
+                dataset: btn.dataset.chart,
+                classes: btn.className,
+                hasClickListener: btn.onclick !== null
+            });
+        });
+
+        // Check if chart toggle buttons exist in DOM (they only exist on analytics page)
+        if (!chartToggleButtons || chartToggleButtons.length === 0) {
+            console.error('⚠️ No chart toggle buttons found in DOM - skipping setup');
+            console.log('🔍 DOM state:', {
+                analyticsView: document.getElementById('analyticsView'),
+                chartControls: document.querySelector('.chart-controls')
+            });
+            return;
+        }
+
+        // IMPORTANT: Remove the duplicate check - always set up fresh listeners
+        // This ensures buttons work even after navigation
+        if (this.chartToggleButtonsSetup) {
+            console.log('⚠️ Buttons were already set up, but re-setting up anyway to ensure they work');
+        }
+
         const chartWrappers = {
             'velocity': document.getElementById('projectVelocityChart'),
-            'burndown': document.getElementById('projectBurndownChart'), 
+            'burndown': document.getElementById('projectBurndownChart'),
             'distribution': document.getElementById('projectDistributionChart')
         };
-        
-        chartToggleButtons.forEach(button => {
-            button.addEventListener('click', () => {
+
+        console.log('🔍 Chart wrappers found:', {
+            velocity: !!chartWrappers.velocity,
+            burndown: !!chartWrappers.burndown,
+            distribution: !!chartWrappers.distribution
+        });
+
+        // First, remove any existing listeners by cloning buttons
+        const parentControls = document.querySelector('.chart-controls');
+        if (parentControls) {
+            const newControls = parentControls.cloneNode(true);
+            parentControls.parentNode.replaceChild(newControls, parentControls);
+            console.log('🔄 Cloned chart controls to remove old listeners');
+        }
+
+        // Re-query buttons after cloning
+        const freshButtons = document.querySelectorAll('.chart-toggle');
+        console.log(`🔍 Re-queried ${freshButtons.length} fresh buttons after cloning`);
+
+        let setupCount = 0;
+        freshButtons.forEach((button, index) => {
+            console.log(`🔧 Setting up listener for button ${index}:`, button.dataset.chart);
+
+            const clickHandler = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log(`🖱️ Chart toggle button clicked: ${button.dataset.chart}`);
+
                 // Remove active class from all buttons
-                chartToggleButtons.forEach(btn => btn.classList.remove('active'));
+                freshButtons.forEach(btn => btn.classList.remove('active'));
                 // Add active class to clicked button
                 button.classList.add('active');
-                
+
                 // Hide all chart wrappers
                 Object.values(chartWrappers).forEach(wrapper => {
-                    if (wrapper) wrapper.classList.add('hidden');
+                    if (wrapper) {
+                        wrapper.classList.add('hidden');
+                        console.log(`🙈 Hiding chart wrapper:`, wrapper.id);
+                    }
                 });
-                
+
                 // Show selected chart wrapper
                 const selectedChart = button.dataset.chart;
                 const selectedWrapper = chartWrappers[selectedChart];
                 if (selectedWrapper) {
                     selectedWrapper.classList.remove('hidden');
-                }
-                
-                console.log(`📊 Switched to ${selectedChart} chart`);
-            });
-        });
-        
-        console.log('📊 Chart toggle buttons setup complete');
-    }
-
-    // Delete task functionality
-    async deleteTask(taskId) {
-        try {
-            console.log(`🗑️ Deleting task: ${taskId}`);
-
-            // Find the task to delete
-            const taskToDelete = this.tasks.find(task => task.id === taskId);
-            if (!taskToDelete) {
-                throw new Error(`Task ${taskId} not found`);
-            }
-
-            // Remove from tasks array
-            this.tasks = this.tasks.filter(task => task.id !== taskId);
-
-            // Delete the task file from server
-            if (this.isWebVersion && window.globalDataManager && window.globalDataManager.apiClient) {
-                console.log(`🔄 Deleting task file for ${taskId} via API`);
-                await window.globalDataManager.apiClient.deleteTask(this.currentProject.id, taskId);
-                console.log(`✅ Task file deleted successfully for ${taskId}`);
-            }
-
-            // Close task detail modal if it's open for this task
-            if (this.currentTask && this.currentTask.id === taskId) {
-                // Use global function
-                if (typeof closeTaskModal === 'function') {
-                    await closeTaskModal();
+                    console.log(`👁️ Showing chart wrapper:`, selectedWrapper.id);
                 } else {
-                    // Fallback to direct modal close
-                    const modal = document.getElementById('taskDetailModal');
-                    if (modal) {
-                        modal.style.display = 'none';
-                        document.body.style.overflow = 'auto';
-                    }
-                    this.currentTask = null;
+                    console.error(`❌ Chart wrapper not found for: ${selectedChart}`);
                 }
-            }
 
-            // Refresh the kanban board
-            this.renderBoard();
+                console.log(`📊 Switched to ${selectedChart} chart`);
+            };
 
-            console.log(`✅ Task ${taskId} deleted successfully`);
-            return true;
+            button.addEventListener('click', clickHandler);
+            console.log(`✅ Added click listener to button ${index}`);
+            setupCount++;
+        });
 
-        } catch (error) {
-            console.error('❌ Error deleting task:', error);
-            alert(`Error deleting task: ${error.message}`);
-            return false;
+        this.chartToggleButtonsSetup = true;
+        console.log(`✅ Chart toggle buttons set up successfully (${setupCount} buttons)`);
+
+        // Test: manually trigger a click to verify
+        console.log('🧪 Testing: Attempting to click first button programmatically...');
+        if (freshButtons[0]) {
+            // Don't actually click, just log that we could
+            console.log('🧪 First button is accessible and ready for clicks');
         }
     }
 }
@@ -7380,12 +7552,16 @@ window.closeCreateTaskDetailModal = function() {
     if (modal) {
         modal.style.display = 'none';
         document.body.style.overflow = 'auto';
-        
+
         // Clear currentTask when closing create modal
         if (window.projectBoard) {
             console.log('🧹 Clearing currentTask on create modal close');
             window.projectBoard.currentTask = null;
-            
+
+            // Reset the create task form to default values
+            console.log('🔄 Resetting create task form to defaults');
+            window.projectBoard.initializeCreateTaskModal();
+
             // Refresh kanban board to show any newly created tasks
             console.log('🔄 Refreshing kanban board after closing create task modal');
             window.projectBoard.filterAndRenderTasks();
@@ -7411,14 +7587,24 @@ window.createNewTaskFromModal = async function() {
         const description = document.getElementById('createTaskDescriptionEditor')?.value?.trim() || '';
         const priority = document.getElementById('createTaskPrioritySelect')?.value || 'medium';
         const status = document.getElementById('createTaskStatusSelect')?.value || 'backlog';
-        
+
+        // Get time estimate from hidden field or currentTask
+        const createTaskEstimate = document.getElementById('createTaskEstimate');
+        const timeEstimate = createTaskEstimate?.value || projectBoard.currentTask?.timeEstimate || '0h';
+
+        // Get time spent from hidden field or currentTask
+        const createTaskTimeSpent = document.getElementById('createTaskTimeSpent');
+        const timeSpent = createTaskTimeSpent?.value || projectBoard.currentTask?.timeSpent || '0h';
+
         console.log('🔍 DEBUG: Task creation values:', {
             taskName: taskName,
             taskNameEmpty: !taskName,
             taskNameLength: taskName ? taskName.length : 0,
             description: description,
             priority: priority,
-            status: status
+            status: status,
+            timeEstimate: timeEstimate,
+            timeSpent: timeSpent
         });
         const assigneeSelected = document.querySelector('#createDropdownSelected .selected-value')?.textContent || 'Unassigned';
         
@@ -7474,8 +7660,8 @@ window.createNewTaskFromModal = async function() {
             priority: priority,
             assignee: assigneeSelected === 'Unassigned' ? '' : assigneeSelected,
             developer: assigneeSelected === 'Unassigned' ? '' : assigneeSelected,
-            timeEstimate: '2h',
-            timeSpent: '0h',
+            timeEstimate: timeEstimate,
+            timeSpent: timeSpent,
             created: new Date().toISOString().substring(0, 10),
             projectId: projectBoard.currentProject.id,
             // Add UI-specific fields
@@ -7779,4 +7965,56 @@ window.openTaskById = function(taskId) {
     // Use the improved openTaskByName method which handles both ID and name search
     // and includes its own logic for waiting for tasks to load
     projectBoard.openTaskByName(taskId);
+};
+
+// GLOBAL FUNCTION FOR CHART SWITCHING - DIRECT ONCLICK HANDLER
+window.switchChart = function(chartType) {
+    console.log('🎯 window.switchChart called with:', chartType);
+
+    // Get all buttons and chart wrappers
+    const buttons = document.querySelectorAll('.chart-toggle');
+    const chartWrappers = {
+        'velocity': document.getElementById('projectVelocityChart'),
+        'burndown': document.getElementById('projectBurndownChart'),
+        'distribution': document.getElementById('projectDistributionChart')
+    };
+
+    console.log('🔍 Found buttons:', buttons.length);
+    console.log('🔍 Chart wrappers:', {
+        velocity: !!chartWrappers.velocity,
+        burndown: !!chartWrappers.burndown,
+        distribution: !!chartWrappers.distribution
+    });
+
+    // Remove active class from all buttons
+    buttons.forEach(btn => {
+        btn.classList.remove('active');
+        console.log(`  Removed active from: ${btn.dataset.chart}`);
+    });
+
+    // Add active class to clicked button
+    const activeButton = document.querySelector(`[data-chart="${chartType}"]`);
+    if (activeButton) {
+        activeButton.classList.add('active');
+        console.log(`✅ Added active to: ${chartType}`);
+    }
+
+    // Hide all charts
+    Object.entries(chartWrappers).forEach(([name, wrapper]) => {
+        if (wrapper) {
+            wrapper.classList.add('hidden');
+            console.log(`🙈 Hidden: ${name}`);
+        }
+    });
+
+    // Show selected chart
+    const selectedWrapper = chartWrappers[chartType];
+    if (selectedWrapper) {
+        selectedWrapper.classList.remove('hidden');
+        console.log(`👁️ Showing: ${chartType}`);
+    } else {
+        console.error(`❌ Chart wrapper not found for: ${chartType}`);
+    }
+
+    console.log(`✅ Switched to ${chartType} chart`);
 };

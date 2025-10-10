@@ -351,7 +351,8 @@ class FiraRouter {
             console.log(`  - Already loaded: ${!!document.querySelector(`script[src="${src}"]`)}`);
             
             const isAlreadyLoaded = !!document.querySelector(`script[src="${src}"]`);
-            const isProjectBoard = src === '../project-board.js';
+            // Check if this is project-board.js (with or without query params)
+            const isProjectBoard = src && (src.startsWith('../project-board.js') || src.includes('project-board.js'));
 
             // Special handling for project-board.js - always ensure it's loaded and function is available
             if (isProjectBoard) {
@@ -369,24 +370,51 @@ class FiraRouter {
                 // Fix the path: ../project-board.js should resolve to /project-board.js from root
                 const correctedPath = '/project-board.js';
                 newScript.src = correctedPath + '?v=' + Date.now();
-                newScript.onload = () => {
-                    console.log('✅ Project board script loaded:', typeof window.initProjectBoard);
-                };
-                newScript.onerror = () => {
-                    console.error('❌ Failed to load project board script from:', correctedPath);
-                    console.log('🔄 Trying alternative path /pages/project-board.js...');
 
-                    // Fallback to alternative path
-                    const fallbackScript = document.createElement('script');
-                    fallbackScript.src = '../project-board.js?v=' + Date.now();
-                    fallbackScript.onload = () => {
-                        console.log('✅ Project board script loaded via fallback:', typeof window.initProjectBoard);
+                // Create a promise that resolves when script loads AND executes
+                window.projectBoardScriptLoaded = new Promise((resolve, reject) => {
+                    newScript.onload = () => {
+                        console.log('✅ Project board script file loaded, waiting for execution...');
+                        // Wait a bit for script to execute
+                        setTimeout(() => {
+                            console.log('✅ Script executed, initProjectBoard type:', typeof window.initProjectBoard);
+                            if (typeof window.initProjectBoard === 'function') {
+                                console.log('✅ initProjectBoard is available!');
+                                resolve();
+                            } else {
+                                console.error('❌ initProjectBoard still not available after script execution');
+                                reject(new Error('initProjectBoard function not found after script load'));
+                            }
+                        }, 100);
                     };
-                    fallbackScript.onerror = () => {
-                        console.error('❌ Failed to load project board script via fallback path');
+                    newScript.onerror = () => {
+                        console.error('❌ Failed to load project board script from:', correctedPath);
+                        console.log('🔄 Trying alternative path ../project-board.js...');
+
+                        // Fallback to alternative path
+                        const fallbackScript = document.createElement('script');
+                        fallbackScript.src = '../project-board.js?v=' + Date.now();
+                        fallbackScript.onload = () => {
+                            console.log('✅ Project board script loaded via fallback, waiting for execution...');
+                            setTimeout(() => {
+                                console.log('✅ Fallback script executed, initProjectBoard type:', typeof window.initProjectBoard);
+                                if (typeof window.initProjectBoard === 'function') {
+                                    console.log('✅ initProjectBoard is available via fallback!');
+                                    resolve();
+                                } else {
+                                    console.error('❌ initProjectBoard still not available after fallback');
+                                    reject(new Error('initProjectBoard function not found after fallback'));
+                                }
+                            }, 100);
+                        };
+                        fallbackScript.onerror = () => {
+                            console.error('❌ Failed to load project board script via fallback path');
+                            reject(new Error('Failed to load project-board.js'));
+                        };
+                        document.head.appendChild(fallbackScript);
                     };
-                    document.head.appendChild(fallbackScript);
-                };
+                });
+
                 document.head.appendChild(newScript);
             } else if (src && !scriptsToSkip.includes(src) && !isAlreadyLoaded) {
                 console.log(`✅ Loading script: ${src}`);
@@ -727,8 +755,25 @@ const RouteHandlers = {
                     console.log('✅ Projects list already available');
                 }
 
-                // Step 3: Initialize project board for the specific project
-                console.log('🔗 Step 2: Initializing project board for:', projectname);
+                // Step 3: Wait for project-board.js to load
+                console.log('🔗 Step 2: Waiting for project-board.js to load...');
+                if (window.projectBoardScriptLoaded) {
+                    try {
+                        await window.projectBoardScriptLoaded;
+                        console.log('✅ Project board script fully loaded and executed');
+                    } catch (error) {
+                        console.error('❌ Failed to load project board script:', error);
+                        // Clear safety timeout
+                        clearTimeout(safetyTimeout);
+                        firaRouter.showError('Failed to load project board script: ' + error.message);
+                        return;
+                    }
+                } else {
+                    console.warn('⚠️ projectBoardScriptLoaded promise not found, script may not have loaded yet');
+                }
+
+                // Step 4: Initialize project board for the specific project
+                console.log('🔗 Step 3: Initializing project board for:', projectname);
                 console.log('🔍 Checking for initProjectBoard function...');
                 console.log('  initProjectBoard type:', typeof initProjectBoard);
                 console.log('  window.initProjectBoard type:', typeof window.initProjectBoard);
@@ -742,28 +787,11 @@ const RouteHandlers = {
                     await window.initProjectBoard(projectname);
                     console.log('✅ Project board initialized successfully');
                 } else {
-                    console.log('⚠️ initProjectBoard not available, using fallback sequence');
-                    // Try multiple times with increasing delays
-                    let attempts = 0;
-                    const maxAttempts = 20;
-
-                    const tryInitProjectBoard = async () => {
-                        attempts++;
-                        console.log(`🔄 Fallback attempt ${attempts}/${maxAttempts}: checking for initProjectBoard...`);
-
-                        if (typeof window.initProjectBoard === 'function') {
-                            console.log('✅ initProjectBoard now available, initializing...');
-                            await window.initProjectBoard(projectname);
-                            console.log('✅ Fallback initialization complete');
-                        } else if (attempts < maxAttempts) {
-                            setTimeout(tryInitProjectBoard, 200);
-                        } else {
-                            console.error('❌ initProjectBoard still not available after all attempts');
-                            firaRouter.showError(`Failed to load project "${projectname}". Project board initialization function not found.`);
-                        }
-                    };
-
-                    setTimeout(tryInitProjectBoard, 300);
+                    console.error('❌ initProjectBoard function not found after script load');
+                    // Clear safety timeout
+                    clearTimeout(safetyTimeout);
+                    firaRouter.showError(`Failed to load project "${projectname}". Project board initialization function not found.`);
+                    return;
                 }
 
                 console.log('🔗 Project initialization sequence completed');

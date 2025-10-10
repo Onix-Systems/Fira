@@ -4,8 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Project Board - Fira</title>
+    <style>
+        /* Critical CSS: Prevent FOUC by hiding content until styles load */
+        html { visibility: hidden; }
+    </style>
     <link rel="stylesheet" href="../style.css">
-    <link rel="stylesheet" href="../project-board.css">
+    <link rel="stylesheet" href="../project-board.css" onload="document.documentElement.style.visibility='visible'">
     <script src="../projects-data.js"></script>
     <script src="../file-system.js"></script>
     <script src="../global-data.js"></script>
@@ -440,7 +444,7 @@
                     </div>
                 </div>
                 <button class="delete-task-button" id="deleteTaskBtn" onclick="showDeleteTaskConfirmation()">
-                    <img src="res/icons/delete_icon.png" alt="Delete" width="18" height="18">
+                    <img src="../res/icons/delete_icon.png" alt="Delete" width="18" height="18">
                 </button>
             </div>
 
@@ -690,13 +694,13 @@
 
                     <div class="form-group">
                         <label for="newTaskEstimate" class="form-label">Time Estimate</label>
-                        <input 
-                            type="text" 
-                            id="newTaskEstimate" 
+                        <input
+                            type="text"
+                            id="newTaskEstimate"
                             name="taskEstimate"
-                            class="form-input" 
+                            class="form-input"
                             placeholder="e.g., 2h, 1d, 30m"
-                            value="2h"
+                            value="0h"
                         />
                         <div class="form-help">Use format like: 2h (hours), 30m (minutes), 1d (days)</div>
                     </div>
@@ -807,7 +811,7 @@
                                 </div>
                                 <div class="time-labels">
                                     <span class="time-spent">0h</span>
-                                    <span class="time-remaining" id="createTimeRemaining">2h remaining</span>
+                                    <span class="time-remaining" id="createTimeRemaining">0h remaining</span>
                                 </div>
                             </div>
                         </div>
@@ -1103,7 +1107,7 @@
     </div>
 
 
-    <script src="../project-board.js"></script>
+    <script src="../project-board.js?v=3.0CHARTFIX"></script>
     
     <script>
         // Простий спосіб додати кнопку через JavaScript
@@ -1111,7 +1115,7 @@
             const projectTitle = document.querySelector('.project-title h1');
             if (projectTitle) {
                 const infoButton = document.createElement('button');
-                infoButton.innerHTML = '<img src="/res/icons/info_icon.png" alt="Info" width="16" height="16" />';
+                infoButton.innerHTML = '<img src="../res/icons/info_icon.png" alt="Info" width="16" height="16" />';
                 infoButton.style.cssText = `
                     margin-left: 10px;
                     padding: 4px;
@@ -1164,7 +1168,7 @@
         <div class="modal-container">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>Delete task</h2>
+                    <h2>Delete Task</h2>
                 </div>
                 <div class="modal-body">
                     <p>Are you sure you want to delete this task? This action cannot be undone.</p>
