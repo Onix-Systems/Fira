@@ -27,6 +27,7 @@ Fira offers three deployment modes:
 - **Task Management** - Drag-and-drop tasks with time tracking and comments
 - **Team Collaboration** - Developer-specific task assignments and workflows
 - **Dual Architecture** - Choose between server-based or local file-based operation
+- **AI-Friendly Format** - Tasks are stored as Markdown files, making it easy to generate task descriptions with AI tools and seamlessly import them into Fira
 
 ## Quick Start
 
@@ -97,6 +98,31 @@ docker run -p 8080:80 fira-web
 
 **Detailed guide:** https://github.com/Onix-Systems/Fira/wiki/Deployment (includes Kubernetes and CI/CD setup)
 
+---
+
+## AI-Powered Task Generation
+
+Fira's Markdown-based format enables seamless integration with AI tools for task creation:
+
+1. **Generate tasks with AI** - Use any AI tool (ChatGPT, Claude, etc.) to generate task descriptions in Markdown format with YAML frontmatter
+2. **Save to project directory** - Place the generated `.md` files directly into your project's workflow folders (`backlog/`, `progress/`, etc.)
+3. **Instant visibility** - Tasks appear immediately in Fira's Kanban board without any import process
+
+**Example workflow:**
+```bash
+# Generate task with AI and save to backlog
+echo "---
+title: Implement user authentication
+estimate: 8h
+priority: high
+status: backlog
+---
+
+# Task Description
+Implement JWT-based authentication..." > projects/my-project/backlog/AUTH-001.md
+```
+
+The file-based architecture means any tool that can write Markdown files can create tasks for Fira.
 
 ## Support
 - Contact: denys.kramar@onix-systems.com
