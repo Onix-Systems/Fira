@@ -1,5 +1,13 @@
+<img width="1536" height="1024" alt="fira-hero" src="https://github.com/user-attachments/assets/46f2677f-3810-49ac-bdf5-46600ecec25f" />
+
+
+<div align="center">
+
 [![Landing Site](https://img.shields.io/badge/Website-Landing%20Page-blue?logo=web)](https://onix-systems-android-tasks.dev.onix.team/landing/index.html)
 [![Wiki](https://img.shields.io/badge/Wiki-GitHub%20Wiki-green?logo=tools)](https://github.com/Onix-Systems/Fira/wiki)
+[![Docker](https://img.shields.io/badge/Docker-Container-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/r/YOUR_USERNAME/fira)
+
+</div>
 
 # Fira - Project Management Platform
 
