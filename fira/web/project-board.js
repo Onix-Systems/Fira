@@ -266,6 +266,12 @@ class ProjectBoard {
         }
 
         this.loadProjectFromUrl();
+
+        // Initialize blocked work manager with current project
+        if (window.blockedWorkManager && this.currentProject) {
+            window.blockedWorkManager.init(this.currentProject.id);
+        }
+
         this.setupEventListeners();
         await this.loadProjectTasks();
         this.filterAndRenderTasks();
@@ -627,6 +633,19 @@ class ProjectBoard {
             addDeveloperBtn.addEventListener('click', addDeveloperHandler);
             this.eventHandlers = this.eventHandlers || new Map();
             this.eventHandlers.set('addDeveloperBtn', addDeveloperHandler);
+        }
+
+        // Blocked Only filter button
+        const blockedFilterBtn = document.getElementById('blockedFilterBtn');
+        if (blockedFilterBtn) {
+            const blockedFilterHandler = () => {
+                blockedFilterBtn.classList.toggle('active');
+                document.body.classList.toggle('filter-blocked-only');
+                console.log('🚫 Blocked filter toggled:', document.body.classList.contains('filter-blocked-only'));
+            };
+            blockedFilterBtn.addEventListener('click', blockedFilterHandler);
+            this.eventHandlers = this.eventHandlers || new Map();
+            this.eventHandlers.set('blockedFilterBtn', blockedFilterHandler);
         }
 
         // Create task form submission
@@ -1279,7 +1298,12 @@ class ProjectBoard {
     createTaskCard(task) {
         const card = document.createElement('div');
         card.className = 'task-card';
-        
+
+        // Add blocked class if task is blocked
+        if (task.blocked && task.is_currently_blocked) {
+            card.classList.add('blocked');
+        }
+
         // Only make draggable if user can edit
         if (this.canEdit()) {
             card.draggable = true;
@@ -1290,12 +1314,16 @@ class ProjectBoard {
             card.classList.add('viewer-readonly');
             console.log('👁️ Created read-only card for task:', task.id, '(viewer mode)');
         }
-        
+
         card.dataset.taskId = task.id;
-        
+
+        // Get blocked badge and button HTML
+        const blockedBadge = window.blockedWorkManager ? window.blockedWorkManager.getBlockedBadgeHTML(task) : '';
+        const blockButton = window.blockedWorkManager ? window.blockedWorkManager.getBlockButtonHTML(task) : '';
+
         card.innerHTML = `
             <div class="task-card-header">
-                <div class="task-id">${task.id}</div>
+                <div class="task-id">${task.id}${blockedBadge}</div>
                 <div class="task-time" title="Click to track time">
                     <svg class="time-icon" viewBox="0 0 16 16" fill="currentColor">
                         <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0zM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0zm7-3.25v2.992l2.028.812a.75.75 0 0 1-.557 1.392l-2.5-1A.751.751 0 0 1 7 8.25v-3.5a.75.75 0 0 1 1.5 0z"/>
@@ -1306,6 +1334,7 @@ class ProjectBoard {
             <div class="task-name">${task.title}</div>
             <div class="task-card-footer">
                 <div class="task-assignee">${task.assignee || 'Unassigned'}</div>
+                ${blockButton}
                 <div class="task-priority ${task.priority}">${task.priority.toUpperCase()}</div>
             </div>
         `;

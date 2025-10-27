@@ -1,0 +1,393 @@
+/* ============================================
+   Blocked Work Styling - Compact Design
+   ============================================ */
+
+/* Blocked Badge (shown in task card header) */
+.task-blocked-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 6px;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 4px;
+    color: #dc2626;
+    font-size: 10px;
+    font-weight: 600;
+    animation: pulse-blocked 2s ease-in-out infinite;
+    margin-left: 6px;
+}
+
+.task-blocked-badge svg {
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+}
+
+@keyframes pulse-blocked {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.6;
+    }
+}
+
+/* Blocked Task Card Styling */
+.task-card.blocked {
+    border-left: 3px solid #dc2626 !important;
+    background: linear-gradient(to right, #fef2f2 0%, #ffffff 15%);
+}
+
+/* Compact Block/Unblock Button in Footer */
+.task-block-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    background: white;
+    color: #6b7280;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.task-block-btn:hover {
+    background: #f9fafb;
+    border-color: #d1d5db;
+    color: #374151;
+    transform: scale(1.05);
+}
+
+.task-block-btn:active {
+    transform: scale(0.95);
+}
+
+/* Blocked state (red) */
+.task-block-btn.blocked {
+    background: #fef2f2;
+    border-color: #fecaca;
+    color: #dc2626;
+}
+
+.task-block-btn.blocked:hover {
+    background: #fee2e2;
+    border-color: #fca5a5;
+    color: #b91c1c;
+}
+
+.task-block-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* Task Card Footer Layout - Center the block button */
+.task-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.task-card-footer .task-assignee {
+    font-size: 12px;
+    color: #6b7280;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.task-card-footer .task-block-btn {
+    flex: 0 0 auto;
+    margin: 0 auto;
+}
+
+.task-card-footer .task-priority {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 4px;
+    flex: 0 0 auto;
+}
+
+/* Priority colors */
+.task-priority.low {
+    background: #f0fdf4;
+    color: #15803d;
+    border: 1px solid #bbf7d0;
+}
+
+.task-priority.medium {
+    background: #fef3c7;
+    color: #d97706;
+    border: 1px solid #fde68a;
+}
+
+.task-priority.high {
+    background: #fee2e2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+}
+
+/* Block Reason Modal */
+.blocked-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    padding: 20px;
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.blocked-modal-content {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    max-width: 500px;
+    width: 100%;
+    overflow: hidden;
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.blocked-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid #e5e7eb;
+    background: #f9fafb;
+}
+
+.blocked-modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #111827;
+}
+
+.blocked-modal-close {
+    background: none;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    color: #6b7280;
+    transition: color 0.2s;
+    border-radius: 4px;
+}
+
+.blocked-modal-close:hover {
+    color: #111827;
+    background: #f3f4f6;
+}
+
+.blocked-modal-body {
+    padding: 24px;
+}
+
+.blocked-modal-body label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #374151;
+}
+
+.block-reason-input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    resize: vertical;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.block-reason-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.block-reason-input.error {
+    border-color: #dc2626;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+    animation: shake 0.3s ease;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+}
+
+.blocked-modal-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+    justify-content: flex-end;
+}
+
+.btn-cancel {
+    padding: 10px 20px;
+    background: white;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #374151;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-cancel:hover {
+    background: #f9fafb;
+    border-color: #9ca3af;
+}
+
+.btn-block {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: #dc2626;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: white;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-block:hover {
+    background: #b91c1c;
+}
+
+.btn-block:active {
+    transform: scale(0.98);
+}
+
+.btn-block:disabled {
+    background: #9ca3af;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+/* Blocked Filter Button - matches add-developer-btn style */
+.blocked-filter-btn {
+    background: #f3f4f6 !important;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #374151;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex !important;
+    visibility: visible !important;
+    align-items: center;
+    gap: 6px;
+    margin-left: 8px;
+    white-space: nowrap;
+}
+
+.blocked-filter-btn:hover {
+    background: #e5e7eb !important;
+    border-color: #9ca3af;
+    color: #1f2937;
+}
+
+.blocked-filter-btn:focus {
+    background: #e5e7eb !important;
+    border-color: #8b5cf6;
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+    outline: none;
+}
+
+.blocked-filter-btn svg {
+    width: 16px;
+    height: 16px;
+    color: #6b7280;
+}
+
+.blocked-filter-btn:hover svg {
+    color: #374151;
+}
+
+/* Active state when filter is enabled */
+.blocked-filter-btn.active {
+    background: #fef2f2 !important;
+    border-color: #fca5a5;
+    color: #dc2626;
+}
+
+.blocked-filter-btn.active svg {
+    color: #dc2626;
+}
+
+.blocked-filter-btn.active:hover {
+    background: #fee2e2 !important;
+    border-color: #f87171;
+}
+
+/* Hide non-blocked tasks when filter is active */
+body.filter-blocked-only .task-card:not(.blocked) {
+    display: none;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .blocked-modal-content {
+        max-width: 90%;
+    }
+
+    .task-card-footer {
+        gap: 4px;
+    }
+
+    .task-block-btn {
+        width: 24px;
+        height: 24px;
+    }
+
+    .task-block-btn svg {
+        width: 12px;
+        height: 12px;
+    }
+}

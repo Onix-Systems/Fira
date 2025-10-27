@@ -1,6 +1,6 @@
 # Fira Web
 
-Server-based application with authentication and multi-user support.
+> Production project management system with authentication and server API.
 
 ## Quick Start
 
@@ -31,7 +31,7 @@ python mini-server.py
 
 - User authentication and sessions
 - Project management with file system
-- Kanban board with full CRUD operations
+- Kanban board with full CRUD
 - Analytics dashboard
 - Release date calculator
 - Admin panel at `/admin/`

@@ -10,10 +10,17 @@
     </style>
     <link rel="stylesheet" href="../style.css">
     <link rel="stylesheet" href="../project-board.css" onload="document.documentElement.style.visibility='visible'">
+    <link rel="stylesheet" href="../dow-viewer.css">
+    <link rel="stylesheet" href="../blocked-work.css">
+    <link rel="stylesheet" href="../cfd-chart.css">
     <script src="../projects-data.js"></script>
     <script src="../file-system.js"></script>
+    <script src="../api-client.js"></script>
     <script src="../global-data.js"></script>
+    <script src="../dow-viewer.js"></script>
+    <script src="../blocked-work-manager.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="../cfd-chart.js"></script>
 </head>
 <body>
     <div class="project-board">
@@ -38,6 +45,13 @@
                     <div class="view-toggle">
                         <button class="toggle-btn calculate-date-btn" id="calculateDateBtn">Calculate Date</button>
                         <button class="toggle-btn analytics-btn" id="analyticsBtn">Analytics</button>
+                        <button class="toggle-btn dow-btn" id="dowBtn" title="View Workflow Definition">
+                            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/>
+                                <path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/>
+                            </svg>
+                            Workflow
+                        </button>
                         <button class="toggle-btn view-switch-btn active" id="viewSwitchBtn">List View</button>
                     </div>
                 </div>
@@ -71,6 +85,13 @@
                                 <path d="M8 9a3 3 0 100-6 3 3 0 000 6zM8 11a6 6 0 016 6H2a6 6 0 016-6zM16 7a1 1 0 10-2 0v1h-1a1 1 0 100 2h1v1a1 1 0 102 0v-1h1a1 1 0 100-2h-1V7z"></path>
                             </svg>
                             Add Developer
+                        </button>
+
+                        <button class="blocked-filter-btn" id="blockedFilterBtn" title="Show only blocked tasks">
+                            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clip-rule="evenodd"/>
+                            </svg>
+                            Blocked Only
                         </button>
                     </div>
                     
@@ -423,6 +444,11 @@
                         </div>
                     </div>
                 </div>
+            </div>
+
+            <!-- CFD Chart Section -->
+            <div class="cfd-chart-section">
+                <div id="cfdChartContainer"></div>
             </div>
         </div>
     </div>

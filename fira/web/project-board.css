@@ -222,6 +222,33 @@
     color: white;
 }
 
+/* DoW Button - Definition of Workflow viewer */
+.dow-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    color: #6b7280;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.dow-btn:hover {
+    background: #f9fafb;
+    border-color: #d1d5db;
+    color: #374151;
+}
+
+.dow-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
 /* Create Task Button */
 .create-task-btn {
     background: #8b5cf6;
@@ -492,7 +519,7 @@
 .task-card {
     position: relative;
     width: calc(100% - 20px);
-    height: 90px;
+    min-height: 90px;  /* Changed from fixed height to min-height */
     margin: 0 auto 12px auto;
     background: #FFFFFF;
     box-shadow: 0px 0px 8px rgba(0, 0, 0, 0.25);
@@ -650,9 +677,13 @@
     color: #000000;
     margin: 0;
     flex: 1;
-    white-space: nowrap;
+    /* Allow text to wrap to multiple lines (max 2-3 lines) */
+    white-space: normal;
     overflow: hidden;
     text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     margin-bottom: 8px;
 }
 
@@ -4334,4 +4365,140 @@
         opacity: 0;
         transform: translate(-50%, -50%) scale(0.8);
     }
+}
+
+/* WIP Limits and Cycle Time Styles */
+.column-wip-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.85em;
+    font-weight: 600;
+}
+
+.column-wip-indicator.wip-ok {
+    background-color: #e8f5e9;
+    color: #2e7d32;
+    border: 1px solid #a5d6a7;
+}
+
+.column-wip-indicator.wip-warning {
+    background-color: #fff3e0;
+    color: #e65100;
+    border: 1px solid #ffb74d;
+    animation: pulse-warning 2s ease-in-out infinite;
+}
+
+.column-wip-indicator.wip-blocked {
+    background-color: #ffebee;
+    color: #c62828;
+    border: 1px solid #ef5350;
+    animation: pulse-critical 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-warning {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(230, 81, 0, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 0 8px rgba(230, 81, 0, 0);
+    }
+}
+
+@keyframes pulse-critical {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(198, 40, 40, 0.6);
+    }
+    50% {
+        box-shadow: 0 0 0 10px rgba(198, 40, 40, 0);
+    }
+}
+
+.task-age-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.75em;
+    font-weight: 600;
+    margin-left: 8px;
+}
+
+.task-age-badge.age-fresh {
+    background-color: #e8f5e9;
+    color: #2e7d32;
+}
+
+.task-age-badge.age-warning {
+    background-color: #fff3e0;
+    color: #e65100;
+}
+
+.task-age-badge.age-critical {
+    background-color: #ffebee;
+    color: #c62828;
+    animation: pulse-warning 2s ease-in-out infinite;
+}
+
+.task-cycle-time {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background-color: #f5f5f5;
+    border-radius: 6px;
+    font-size: 0.85em;
+    margin-top: 8px;
+}
+
+.task-cycle-time.within-sle {
+    background-color: #e8f5e9;
+    color: #2e7d32;
+}
+
+.task-cycle-time.exceeds-sle {
+    background-color: #fff3e0;
+    color: #e65100;
+}
+
+/* Icons removed - clean design without emojis */
+
+.wip-limit-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.wip-count-display {
+    font-size: 0.9em;
+    font-weight: 600;
+    color: #666;
+}
+
+/* Task card enhanced with age info */
+.task-card {
+    position: relative;
+}
+
+.task-card.aging-warning {
+    border-left: 4px solid #ff9800;
+}
+
+.task-card.aging-critical {
+    border-left: 4px solid #f44336;
+    box-shadow: 0 2px 8px rgba(244, 67, 54, 0.2);
+}
+
+.task-metadata-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 8px;
+    flex-wrap: wrap;
+    gap: 8px;
 }

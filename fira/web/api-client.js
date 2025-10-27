@@ -607,7 +607,7 @@ class FiraAPIClient {
         try {
             console.log(`📁 API: Creating directory ${projectId}/${parentDir}/${dirName}`);
             console.log(`📡 Using base URL: ${this.baseUrl}`);
-            
+
             const response = await fetch(`${this.baseUrl}/api/create-directory`, {
                 method: 'POST',
                 headers: {
@@ -625,7 +625,7 @@ class FiraAPIClient {
             }
 
             const data = await response.json();
-            
+
             if (data.success) {
                 console.log(`✅ API: Directory created successfully`);
                 // Clear projects cache to force refresh
@@ -636,6 +636,234 @@ class FiraAPIClient {
             }
         } catch (error) {
             console.error('Error creating directory:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get WIP configuration
+     */
+    async getWIPConfig() {
+        if (!this.shouldProceedWithApiCall()) {
+            throw new Error('Server not available');
+        }
+
+        try {
+            const response = await fetch(`${this.baseUrl}/api/wip-config`);
+            const data = await response.json();
+
+            if (data.success) {
+                return data.config;
+            } else {
+                throw new Error(data.error || 'Failed to get WIP config');
+            }
+        } catch (error) {
+            console.error('Error fetching WIP config:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get WIP status for a project
+     */
+    async getWIPStatus(projectId) {
+        if (!this.shouldProceedWithApiCall()) {
+            throw new Error('Server not available');
+        }
+
+        try {
+            const response = await fetch(`${this.baseUrl}/api/projects/${encodeURIComponent(projectId)}/wip-status`);
+            const data = await response.json();
+
+            if (data.success) {
+                return data.wip_status;
+            } else {
+                throw new Error(data.error || 'Failed to get WIP status');
+            }
+        } catch (error) {
+            console.error('Error fetching WIP status:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Block a task with a reason
+     * @param {string} projectId - The project identifier
+     * @param {string} taskId - The task identifier
+     * @param {string} reason - The reason for blocking
+     */
+    async blockTask(projectId, taskId, reason) {
+        if (!this.shouldProceedWithApiCall()) {
+            throw new Error('Server not available');
+        }
+
+        try {
+            console.log(`🚫 API: Blocking task ${taskId} in project ${projectId}`);
+
+            const response = await fetch(
+                `${this.baseUrl}/api/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/block`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ reason })
+                }
+            );
+
+            const data = await response.json();
+
+            if (data.success) {
+                console.log(`✅ API: Task ${taskId} blocked successfully`);
+                // Clear cache to force refresh
+                this.clearCache();
+                return data.task;
+            } else {
+                throw new Error(data.error || 'Failed to block task');
+            }
+        } catch (error) {
+            console.error('Error blocking task:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Unblock a task
+     * @param {string} projectId - The project identifier
+     * @param {string} taskId - The task identifier
+     */
+    async unblockTask(projectId, taskId) {
+        if (!this.shouldProceedWithApiCall()) {
+            throw new Error('Server not available');
+        }
+
+        try {
+            console.log(`✅ API: Unblocking task ${taskId} in project ${projectId}`);
+
+            const response = await fetch(
+                `${this.baseUrl}/api/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/unblock`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                }
+            );
+
+            const data = await response.json();
+
+            if (data.success) {
+                console.log(`✅ API: Task ${taskId} unblocked successfully`);
+                // Clear cache to force refresh
+                this.clearCache();
+                return data.task;
+            } else {
+                throw new Error(data.error || 'Failed to unblock task');
+            }
+        } catch (error) {
+            console.error('Error unblocking task:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get CFD (Cumulative Flow Diagram) data for a project
+     * @param {string} projectId - The project identifier
+     * @param {number} days - Number of days of history to fetch (default: 30)
+     * @returns {Promise<Array>} Array of CFD snapshots
+     */
+    async getCFDData(projectId, days = 30) {
+        // Note: Server availability check is done by caller (CFDChart)
+        // to avoid double-checking and allow better error handling
+
+        try {
+            console.log(`📊 API: Getting CFD data for project ${projectId} (${days} days)`);
+
+            const response = await fetch(
+                `${this.baseUrl}/api/projects/${encodeURIComponent(projectId)}/cfd-data?days=${days}`
+            );
+
+            const data = await response.json();
+
+            if (data.success) {
+                console.log(`📊 API: Received ${data.data.length} CFD snapshots for ${projectId}`);
+                return data.data;
+            } else {
+                throw new Error(data.error || 'Failed to get CFD data');
+            }
+        } catch (error) {
+            console.error('Error fetching CFD data:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Create a CFD snapshot for a project
+     * @param {string} projectId - The project identifier
+     * @returns {Promise<Object>} The created snapshot
+     */
+    async createCFDSnapshot(projectId) {
+        // Note: Server availability check is done by caller (CFDChart)
+        // to avoid double-checking and allow better error handling
+
+        try {
+            console.log(`📊 API: Creating CFD snapshot for project ${projectId}`);
+
+            const response = await fetch(
+                `${this.baseUrl}/api/projects/${encodeURIComponent(projectId)}/cfd-snapshot`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                }
+            );
+
+            const data = await response.json();
+
+            if (data.success) {
+                console.log(`📊 API: CFD snapshot created for ${projectId}`);
+                return data.snapshot;
+            } else {
+                throw new Error(data.error || 'Failed to create CFD snapshot');
+            }
+        } catch (error) {
+            console.error('Error creating CFD snapshot:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Create CFD snapshots for all projects
+     * @returns {Promise<Object>} Results of snapshot creation for all projects
+     */
+    async createAllCFDSnapshots() {
+        // Note: Server availability check is done by caller
+        // to avoid double-checking and allow better error handling
+
+        try {
+            console.log('📊 API: Creating CFD snapshots for all projects');
+
+            const response = await fetch(
+                `${this.baseUrl}/api/cfd-snapshot-all`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                }
+            );
+
+            const data = await response.json();
+
+            if (data.success) {
+                console.log(`📊 API: Created CFD snapshots for ${data.results.length} projects`);
+                return data.results;
+            } else {
+                throw new Error(data.error || 'Failed to create CFD snapshots');
+            }
+        } catch (error) {
+            console.error('Error creating all CFD snapshots:', error);
             throw error;
         }
     }

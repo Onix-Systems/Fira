@@ -165,6 +165,223 @@ def delete_user_by_id(user_id):
 class ProjectManager:
     def __init__(self, base_dir):
         self.base_dir = Path(base_dir)
+        self.wip_config = self.load_wip_config()
+
+    def load_wip_config(self):
+        """Load WIP limits configuration"""
+        config_file = Path(os.getcwd()) / 'wip-config.json'
+        try:
+            if config_file.exists():
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            return {
+                'wip_limits': {'backlog': None, 'progress': 5, 'review': 3, 'testing': 4, 'done': None},
+                'cycle_time_sle': {'target_days': 8, 'probability': 85}
+            }
+        except Exception as e:
+            print(f"Error loading WIP config: {e}")
+            return {'wip_limits': {}, 'cycle_time_sle': {'target_days': 8, 'probability': 85}}
+
+    def calculate_cycle_time(self, started_at, done_at):
+        """Calculate cycle time in days between started and done timestamps"""
+        if not started_at or not done_at:
+            return None
+        try:
+            from datetime import datetime
+            start = datetime.fromisoformat(started_at.replace('Z', '+00:00'))
+            end = datetime.fromisoformat(done_at.replace('Z', '+00:00'))
+            delta = end - start
+            return round(delta.total_seconds() / 86400, 2)  # Convert to days
+        except Exception as e:
+            print(f"Error calculating cycle time: {e}")
+            return None
+
+    def calculate_age(self, created_at):
+        """Calculate age in days from creation to now"""
+        if not created_at:
+            return None
+        try:
+            from datetime import datetime
+            created = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+            now = datetime.now(created.tzinfo) if created.tzinfo else datetime.now()
+            delta = now - created
+            return round(delta.total_seconds() / 86400, 2)  # Convert to days
+        except Exception as e:
+            print(f"Error calculating age: {e}")
+            return None
+
+    def check_wip_limit(self, project_id, status, developer=None):
+        """
+        Check if adding a task to the given status would exceed WIP limit
+        Returns: (allowed: bool, current_count: int, limit: int, warning: bool)
+        """
+        wip_limits = self.wip_config.get('wip_limits', {})
+        wip_warnings = self.wip_config.get('wip_warnings', {})
+
+        limit = wip_limits.get(status)
+        if limit is None:
+            # No limit for this column
+            return True, 0, None, False
+
+        # Count current tasks in this status
+        project_path = self.base_dir / project_id
+        if not project_path.exists():
+            return True, 0, limit, False
+
+        status_path = project_path / status
+        if not status_path.exists():
+            return True, 0, limit, False
+
+        current_count = 0
+        # Count all .md files in status folder and subfolders
+        for file_path in status_path.rglob('*.md'):
+            if file_path.name != 'README.md':
+                current_count += 1
+
+        # Check if we're at or over the limit
+        block_on_limit = wip_warnings.get('block_on_limit', False)
+        warning_threshold = wip_warnings.get('warning_threshold', 0.8)
+
+        is_warning = current_count >= (limit * warning_threshold)
+        is_blocked = block_on_limit and current_count >= limit
+
+        allowed = not is_blocked
+
+        print(f"📊 WIP Check for {status}: {current_count}/{limit} (warning: {is_warning}, blocked: {is_blocked})")
+
+        return allowed, current_count, limit, is_warning
+
+    def get_wip_status(self, project_id):
+        """Get WIP status for all columns in a project"""
+        wip_limits = self.wip_config.get('wip_limits', {})
+        status_info = {}
+
+        for status, limit in wip_limits.items():
+            if limit is not None:
+                allowed, count, limit_val, is_warning = self.check_wip_limit(project_id, status)
+                status_info[status] = {
+                    'count': count,
+                    'limit': limit_val,
+                    'warning': is_warning,
+                    'blocked': not allowed
+                }
+
+        return status_info
+
+    def load_cfd_data(self):
+        """Load CFD historical data"""
+        cfd_file = Path(os.getcwd()) / 'cfd-data.json'
+        if not cfd_file.exists():
+            return {}
+
+        try:
+            with open(cfd_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Error loading CFD data: {e}")
+            return {}
+
+    def save_cfd_data(self, cfd_data):
+        """Save CFD data to file"""
+        cfd_file = Path(os.getcwd()) / 'cfd-data.json'
+        try:
+            with open(cfd_file, 'w', encoding='utf-8') as f:
+                json.dump(cfd_data, f, indent=2, ensure_ascii=False)
+            return True
+        except Exception as e:
+            print(f"Error saving CFD data: {e}")
+            return False
+
+    def take_cfd_snapshot(self, project_id):
+        """
+        Take a snapshot of current task distribution for CFD
+        Returns snapshot data
+        """
+        try:
+            # Get all tasks for project
+            project_path = self.base_dir / project_id
+
+            if not project_path.exists():
+                return None
+
+            # Count tasks in each state
+            state_counts = {
+                'backlog': 0,
+                'progress': 0,
+                'review': 0,
+                'testing': 0,
+                'done': 0
+            }
+
+            for state in state_counts.keys():
+                state_path = project_path / state
+                if not state_path.exists():
+                    # Try alternative names
+                    if state == 'progress':
+                        state_path = project_path / 'inprogress'
+                    if not state_path.exists():
+                        continue
+
+                # Count all .md files in state and subdirectories
+                for file_path in state_path.rglob('*.md'):
+                    if file_path.name != 'README.md':
+                        state_counts[state] += 1
+
+            # Create snapshot
+            from datetime import datetime, timezone
+            now = datetime.now(timezone.utc)
+            snapshot = {
+                'date': now.strftime('%Y-%m-%d'),
+                'timestamp': now.isoformat(),
+                **state_counts
+            }
+
+            return snapshot
+
+        except Exception as e:
+            print(f"Error taking CFD snapshot: {e}")
+            return None
+
+    def store_cfd_snapshot(self, project_id, snapshot):
+        """
+        Store a CFD snapshot for a project
+        Avoids duplicates for the same date
+        """
+        try:
+            cfd_data = self.load_cfd_data()
+
+            if project_id not in cfd_data:
+                cfd_data[project_id] = []
+
+            # Check if snapshot for today already exists
+            today = snapshot['date']
+            existing = [s for s in cfd_data[project_id] if s['date'] == today]
+
+            if existing:
+                # Update existing snapshot
+                index = cfd_data[project_id].index(existing[0])
+                cfd_data[project_id][index] = snapshot
+                print(f"📊 Updated CFD snapshot for {project_id} on {today}")
+            else:
+                # Add new snapshot
+                cfd_data[project_id].append(snapshot)
+                print(f"📊 Added new CFD snapshot for {project_id} on {today}")
+
+            # Sort by date
+            cfd_data[project_id].sort(key=lambda x: x['date'])
+
+            # Limit to last 90 days (configurable)
+            max_days = 90
+            if len(cfd_data[project_id]) > max_days:
+                cfd_data[project_id] = cfd_data[project_id][-max_days:]
+
+            # Save
+            self.save_cfd_data(cfd_data)
+            return True
+
+        except Exception as e:
+            print(f"Error storing CFD snapshot: {e}")
+            return False
 
     def create_project(self, project_data):
         """Create a new project folder with standard subfolders and README"""
@@ -400,6 +617,28 @@ class ProjectManager:
             # Extract task ID from filename
             task_id = file_path.stem
 
+            # Parse blocked fields
+            blocked = metadata.get('blocked', 'false').lower() in ['true', 'yes', '1']
+            blocked_at = metadata.get('blocked_at', '')
+            blocked_reason = metadata.get('blocked_reason', '')
+            unblocked_at = metadata.get('unblocked_at', '')
+
+            # Calculate blocked time if currently blocked
+            blocked_time_hours = None
+            blocked_time_days = None
+            is_currently_blocked = blocked and not unblocked_at
+
+            if blocked and blocked_at and is_currently_blocked:
+                try:
+                    from datetime import datetime, timezone
+                    blocked_start = datetime.fromisoformat(blocked_at.replace('Z', '+00:00'))
+                    now = datetime.now(timezone.utc)
+                    blocked_duration = now - blocked_start
+                    blocked_time_hours = blocked_duration.total_seconds() / 3600
+                    blocked_time_days = round(blocked_time_hours / 24, 1)
+                except Exception as e:
+                    print(f"Error calculating blocked time: {e}")
+
             # Build task object
             task = {
                 'id': task_id,
@@ -413,6 +652,21 @@ class ProjectManager:
                 'assignee': metadata.get('developer'),  # Alias
                 'status': metadata.get('status', 'backlog'),
                 'created': metadata.get('created', ''),
+                'created_at': metadata.get('created_at', metadata.get('created', '')),
+                'started_at': metadata.get('started_at', ''),
+                'done_at': metadata.get('done_at', ''),
+                'cycle_time_days': self.calculate_cycle_time(
+                    metadata.get('started_at'),
+                    metadata.get('done_at')
+                ),
+                'age_days': self.calculate_age(metadata.get('created_at', metadata.get('created', ''))),
+                'blocked': blocked,
+                'blocked_at': blocked_at,
+                'blocked_reason': blocked_reason,
+                'unblocked_at': unblocked_at,
+                'blocked_time_hours': blocked_time_hours,
+                'blocked_time_days': blocked_time_days,
+                'is_currently_blocked': is_currently_blocked,
                 'file_path': str(file_path)
             }
 
@@ -630,6 +884,76 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                     'success': False,
                     'error': str(e)
                 }, 500)
+            return
+
+        elif parsed_path.path == '/api/wip-config':
+            # Get WIP configuration
+            try:
+                self.send_json_response({
+                    'success': True,
+                    'config': self.project_manager.wip_config
+                })
+            except Exception as e:
+                self.send_json_response({
+                    'success': False,
+                    'error': str(e)
+                }, 500)
+            return
+
+        elif parsed_path.path.startswith('/api/projects/') and parsed_path.path.endswith('/wip-status'):
+            # Get WIP status for a project
+            # Expected format: /api/projects/{project_id}/wip-status
+            path_parts = parsed_path.path.strip('/').split('/')
+            if len(path_parts) == 4 and path_parts[3] == 'wip-status':
+                try:
+                    from urllib.parse import unquote
+                    project_id = unquote(path_parts[2])
+                    wip_status = self.project_manager.get_wip_status(project_id)
+                    self.send_json_response({
+                        'success': True,
+                        'wip_status': wip_status
+                    })
+                except Exception as e:
+                    self.send_json_response({
+                        'success': False,
+                        'error': str(e)
+                    }, 500)
+            return
+
+        elif parsed_path.path.startswith('/api/projects/') and parsed_path.path.endswith('/cfd-data'):
+            # Get CFD data for a project
+            # Expected format: /api/projects/{project_id}/cfd-data?days=30
+            path_parts = parsed_path.path.strip('/').split('/')
+            if len(path_parts) == 4 and path_parts[3] == 'cfd-data':
+                try:
+                    from urllib.parse import unquote
+                    project_id = unquote(path_parts[2])
+
+                    # Parse query params for days filter
+                    query_params = parse_qs(parsed_path.query)
+                    days = int(query_params.get('days', [30])[0])
+
+                    # Get CFD data
+                    cfd_data = self.project_manager.load_cfd_data()
+                    project_data = cfd_data.get(project_id, [])
+
+                    # Filter to last N days
+                    if days and len(project_data) > days:
+                        project_data = project_data[-days:]
+
+                    self.send_json_response({
+                        'success': True,
+                        'data': project_data,
+                        'project_id': project_id,
+                        'days': len(project_data)
+                    })
+                    print(f"📊 Served CFD data for {project_id}: {len(project_data)} snapshots")
+                except Exception as e:
+                    print(f"Error getting CFD data: {e}")
+                    self.send_json_response({
+                        'success': False,
+                        'error': str(e)
+                    }, 500)
             return
 
         elif parsed_path.path.startswith('/api/projects/') and '/tasks/' in parsed_path.path:
@@ -1600,6 +1924,316 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                 }, 500)
                 print(f"Error uploading image: {e}")
 
+        # Block task endpoint
+        # Expected format: /api/projects/{project_id}/tasks/{task_id}/block
+        elif (len(path_parts) == 6 and
+              path_parts[0] == 'api' and
+              path_parts[1] == 'projects' and
+              path_parts[3] == 'tasks' and
+              path_parts[5] == 'block'):
+
+            try:
+                from urllib.parse import unquote
+                from datetime import datetime, timezone
+
+                project_id = unquote(path_parts[2])
+                task_id = unquote(path_parts[4])
+
+                print(f"🚫 Block task request: {task_id} in project {project_id}")
+
+                # Read request body
+                content_length = int(self.headers.get('Content-Length', 0))
+                if content_length > 0:
+                    body = self.rfile.read(content_length)
+                    data = json.loads(body.decode('utf-8'))
+                    blocked_reason = data.get('reason', 'No reason provided')
+                else:
+                    blocked_reason = 'No reason provided'
+
+                # Find task file
+                task_file_path = None
+                task_status = None
+                task_developer = None
+
+                project_path = self.project_manager.base_dir / project_id
+                if not project_path.exists():
+                    self.send_json_response({
+                        'success': False,
+                        'error': f'Project {project_id} not found'
+                    }, 404)
+                    return
+
+                # Search for task in all status folders
+                for status in ['backlog', 'progress', 'review', 'testing', 'done']:
+                    status_path = project_path / status
+                    if status_path.exists():
+                        # Check direct folder
+                        task_file = status_path / f"{task_id}.md"
+                        if task_file.exists():
+                            task_file_path = task_file
+                            task_status = status
+                            break
+
+                        # Check developer subfolders
+                        for dev_folder in status_path.iterdir():
+                            if dev_folder.is_dir():
+                                task_file = dev_folder / f"{task_id}.md"
+                                if task_file.exists():
+                                    task_file_path = task_file
+                                    task_status = status
+                                    task_developer = dev_folder.name
+                                    break
+                        if task_file_path:
+                            break
+
+                if not task_file_path:
+                    self.send_json_response({
+                        'success': False,
+                        'error': 'Task not found'
+                    }, 404)
+                    return
+
+                # Parse current task
+                task = self.project_manager.parse_task_file(task_file_path)
+                if not task:
+                    self.send_json_response({
+                        'success': False,
+                        'error': 'Failed to parse task file'
+                    }, 500)
+                    return
+
+                # Update blocked fields
+                task['blocked'] = True
+                task['blocked_at'] = datetime.now(timezone.utc).isoformat()
+                task['blocked_reason'] = blocked_reason
+                task['unblocked_at'] = None
+
+                # Update task file
+                success = self.update_task_file(project_id, task)
+
+                if success:
+                    self.send_json_response({
+                        'success': True,
+                        'message': 'Task blocked successfully',
+                        'task': task
+                    })
+                    print(f"✅ Task {task_id} blocked: {blocked_reason}")
+                else:
+                    self.send_json_response({
+                        'success': False,
+                        'error': 'Failed to update task file'
+                    }, 500)
+
+            except Exception as e:
+                print(f"Error blocking task: {e}")
+                import traceback
+                traceback.print_exc()
+                self.send_json_response({
+                    'success': False,
+                    'error': str(e)
+                }, 500)
+            return
+
+        # Unblock task endpoint
+        # Expected format: /api/projects/{project_id}/tasks/{task_id}/unblock
+        elif (len(path_parts) == 6 and
+              path_parts[0] == 'api' and
+              path_parts[1] == 'projects' and
+              path_parts[3] == 'tasks' and
+              path_parts[5] == 'unblock'):
+
+            try:
+                from urllib.parse import unquote
+                from datetime import datetime, timezone
+
+                project_id = unquote(path_parts[2])
+                task_id = unquote(path_parts[4])
+
+                print(f"✅ Unblock task request: {task_id} in project {project_id}")
+
+                # Find task file
+                task_file_path = None
+                task_status = None
+                task_developer = None
+
+                project_path = self.project_manager.base_dir / project_id
+                if not project_path.exists():
+                    self.send_json_response({
+                        'success': False,
+                        'error': f'Project {project_id} not found'
+                    }, 404)
+                    return
+
+                # Search for task in all status folders
+                for status in ['backlog', 'progress', 'review', 'testing', 'done']:
+                    status_path = project_path / status
+                    if status_path.exists():
+                        # Check direct folder
+                        task_file = status_path / f"{task_id}.md"
+                        if task_file.exists():
+                            task_file_path = task_file
+                            task_status = status
+                            break
+
+                        # Check developer subfolders
+                        for dev_folder in status_path.iterdir():
+                            if dev_folder.is_dir():
+                                task_file = dev_folder / f"{task_id}.md"
+                                if task_file.exists():
+                                    task_file_path = task_file
+                                    task_status = status
+                                    task_developer = dev_folder.name
+                                    break
+                        if task_file_path:
+                            break
+
+                if not task_file_path:
+                    self.send_json_response({
+                        'success': False,
+                        'error': 'Task not found'
+                    }, 404)
+                    return
+
+                # Parse current task
+                task = self.project_manager.parse_task_file(task_file_path)
+                if not task:
+                    self.send_json_response({
+                        'success': False,
+                        'error': 'Failed to parse task file'
+                    }, 500)
+                    return
+
+                # Update blocked fields
+                task['blocked'] = False
+                task['unblocked_at'] = datetime.now(timezone.utc).isoformat()
+                # Keep blocked_at and blocked_reason for historical data
+
+                # Update task file
+                success = self.update_task_file(project_id, task)
+
+                if success:
+                    self.send_json_response({
+                        'success': True,
+                        'message': 'Task unblocked successfully',
+                        'task': task
+                    })
+                    print(f"✅ Task {task_id} unblocked")
+                else:
+                    self.send_json_response({
+                        'success': False,
+                        'error': 'Failed to update task file'
+                    }, 500)
+
+            except Exception as e:
+                print(f"Error unblocking task: {e}")
+                import traceback
+                traceback.print_exc()
+                self.send_json_response({
+                    'success': False,
+                    'error': str(e)
+                }, 500)
+            return
+
+        # CFD snapshot endpoint for single project
+        # Expected format: /api/projects/{project_id}/cfd-snapshot
+        elif (len(path_parts) == 4 and
+              path_parts[0] == 'api' and
+              path_parts[1] == 'projects' and
+              path_parts[3] == 'cfd-snapshot'):
+
+            try:
+                from urllib.parse import unquote
+                project_id = unquote(path_parts[2])
+
+                print(f"📊 CFD snapshot request for project: {project_id}")
+
+                # Take snapshot
+                snapshot = self.project_manager.take_cfd_snapshot(project_id)
+
+                if not snapshot:
+                    self.send_json_response({
+                        'success': False,
+                        'error': 'Failed to create snapshot'
+                    }, 500)
+                    return
+
+                # Store snapshot
+                self.project_manager.store_cfd_snapshot(project_id, snapshot)
+
+                self.send_json_response({
+                    'success': True,
+                    'message': 'Snapshot created successfully',
+                    'snapshot': snapshot
+                })
+                print(f"✅ CFD snapshot created for {project_id}")
+
+            except Exception as e:
+                print(f"Error creating CFD snapshot: {e}")
+                import traceback
+                traceback.print_exc()
+                self.send_json_response({
+                    'success': False,
+                    'error': str(e)
+                }, 500)
+            return
+
+        # CFD snapshot for all projects
+        # Expected format: /api/cfd-snapshot-all
+        elif parsed_path.path == '/api/cfd-snapshot-all':
+            try:
+                print("📊 CFD snapshot request for all projects")
+
+                results = []
+                base_dir = self.project_manager.base_dir
+
+                if not base_dir.exists():
+                    self.send_json_response({
+                        'success': False,
+                        'error': 'Working directory not found'
+                    }, 404)
+                    return
+
+                # Iterate through all project directories
+                for item in base_dir.iterdir():
+                    if item.is_dir():
+                        # Check if it looks like a project (has expected folders)
+                        expected_dirs = ['backlog', 'progress', 'inprogress', 'review', 'testing', 'done']
+                        has_states = any((item / d).exists() for d in expected_dirs)
+
+                        if has_states:
+                            project_id = item.name
+                            snapshot = self.project_manager.take_cfd_snapshot(project_id)
+                            if snapshot:
+                                self.project_manager.store_cfd_snapshot(project_id, snapshot)
+                                results.append({
+                                    'project': project_id,
+                                    'success': True,
+                                    'snapshot': snapshot
+                                })
+                            else:
+                                results.append({
+                                    'project': project_id,
+                                    'success': False,
+                                    'error': 'Failed to create snapshot'
+                                })
+
+                self.send_json_response({
+                    'success': True,
+                    'message': f'Created snapshots for {len(results)} projects',
+                    'results': results
+                })
+                print(f"✅ CFD snapshots created for {len(results)} projects")
+
+            except Exception as e:
+                print(f"Error creating all CFD snapshots: {e}")
+                import traceback
+                traceback.print_exc()
+                self.send_json_response({
+                    'success': False,
+                    'error': str(e)
+                }, 500)
+            return
+
         # Select working directory endpoint
         elif parsed_path.path == '/api/select-directory':
             try:
@@ -1961,7 +2595,21 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
         print(f"  timeEstimate: {repr(task_data.get('timeEstimate'))}")
         print(f"  timeSpent: {repr(task_data.get('timeSpent'))}")
         print(f"  task_data keys: {list(task_data.keys())}")
-        
+
+        # Auto-track cycle time timestamps
+        created_at = task_data.get('created_at') or task_data.get('created')
+        started_at = task_data.get('started_at')
+        done_at = task_data.get('done_at')
+
+        # Automatically set timestamps based on status changes
+        if new_status in ['progress', 'inprogress'] and not started_at:
+            started_at = datetime.now().isoformat()
+            print(f"⏱️ Auto-set started_at: {started_at}")
+
+        if new_status == 'done' and not done_at:
+            done_at = datetime.now().isoformat()
+            print(f"✅ Auto-set done_at: {done_at}")
+
         frontmatter = {
             'title': task_data.get('title', ''),
             'estimate': task_data.get('timeEstimate', '0h'),
@@ -1969,12 +2617,21 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
             'priority': task_data.get('priority', 'medium'),
             'developer': task_data.get('developer'),
             'status': new_status,
-            'created': task_data.get('created', datetime.now().isoformat()[:10])
+            'created': task_data.get('created', datetime.now().isoformat()[:10]),
+            'created_at': created_at,
+            'started_at': started_at,
+            'done_at': done_at,
+            'blocked': task_data.get('blocked', False),
+            'blocked_at': task_data.get('blocked_at'),
+            'blocked_reason': task_data.get('blocked_reason'),
+            'unblocked_at': task_data.get('unblocked_at')
         }
-        
+
         print(f"mini-server: Writing frontmatter:")
         print(f"  estimate: {repr(frontmatter['estimate'])}")
         print(f"  spent_time: {repr(frontmatter['spent_time'])}")
+        print(f"  started_at: {repr(frontmatter['started_at'])}")
+        print(f"  done_at: {repr(frontmatter['done_at'])}")
 
         # Remove None values
         frontmatter = {k: v for k, v in frontmatter.items() if v is not None}
@@ -2066,15 +2723,25 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                     lines.append(f"{key}: {value}")
             return '\n'.join(lines)
 
-        # Prepare frontmatter
+        # Prepare frontmatter with cycle time tracking
+        created_at = datetime.now().isoformat()
+        status = task_data.get('status', target_folder)
+
+        # Set started_at if creating task in progress
+        started_at = None
+        if status in ['progress', 'inprogress']:
+            started_at = created_at
+
         frontmatter = {
             'title': task_data.get('title', ''),
             'estimate': task_data.get('timeEstimate', '2h'),
             'spent_time': task_data.get('timeSpent', '0h'),
             'priority': task_data.get('priority', 'medium'),
             'developer': task_data.get('developer') or task_data.get('assignee'),
-            'status': task_data.get('status', target_folder),
-            'created': task_data.get('created', datetime.now().isoformat()[:10])
+            'status': status,
+            'created': datetime.now().isoformat()[:10],
+            'created_at': created_at,
+            'started_at': started_at
         }
 
         # Remove None values
