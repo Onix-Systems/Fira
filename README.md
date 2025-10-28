@@ -4,6 +4,7 @@
 <div align="center">
 
 [![Landing Site](https://img.shields.io/badge/Website-Landing%20Page-blue?logo=web)](https://onix-systems-android-tasks.dev.onix.team/landing/index.html)
+[![YouTube](https://img.shields.io/badge/YouTube-Video-FF0000?logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=OsAko7621MM)
 [![Wiki](https://img.shields.io/badge/Wiki-GitHub%20Wiki-green?logo=tools)](https://github.com/Onix-Systems/Fira/wiki)
 [![Docker](https://img.shields.io/badge/Docker-Container-2496ED?logo=docker&logoColor=white)](https://github.com/Onix-Systems/Fira)
 [![Releases](https://img.shields.io/badge/GitHub-Releases-orange?logo=github)](https://github.com/Onix-Systems/Fira/releases)
