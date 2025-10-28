@@ -47,7 +47,7 @@ Choose your deployment mode:
 Perfect for offline project management with direct file system access.
 ```bash
 # 1. Download and extract
-wget https://github.com/Onix-Systems/Fira/releases/latest/download/fira.zip
+wget https://github.com/Onix-Systems/Fira/releases/download/v1.0.4-local/fira-local_v1.0.4.zip
 unzip fira.zip
 cd fira/local
 
@@ -66,7 +66,7 @@ Server-based for local development without authentication.
 
 ```bash
 # 1. Download and extract
-wget https://github.com/Onix-Systems/Fira/releases/latest/download/fira.zip
+wget https://github.com/Onix-Systems/Fira/releases/download/v1.0.4-with-server/fira-web_v1.0.4.zip
 unzip fira.zip
 cd fira/web
 
@@ -92,7 +92,7 @@ Containerized deployment with Nginx reverse proxy.
 
 ```bash
 # 1. Download and extract
-wget https://github.com/Onix-Systems/Fira/releases/latest/download/fira.zip
+wget https://github.com/Onix-Systems/Fira/releases/download/v1.0.4-docker-deploy/docker-deploy_v1.0.4.zip
 unzip fira.zip
 cd fira/docker-deploy
 
