@@ -8,19 +8,19 @@
         /* Critical CSS: Prevent FOUC by hiding content until styles load */
         html { visibility: hidden; }
     </style>
-    <link rel="stylesheet" href="../style.css">
-    <link rel="stylesheet" href="../project-board.css" onload="document.documentElement.style.visibility='visible'">
-    <link rel="stylesheet" href="../dow-viewer.css">
-    <link rel="stylesheet" href="../blocked-work.css">
-    <link rel="stylesheet" href="../cfd-chart.css">
-    <script src="../projects-data.js"></script>
-    <script src="../file-system.js"></script>
-    <script src="../api-client.js"></script>
-    <script src="../global-data.js"></script>
-    <script src="../dow-viewer.js"></script>
-    <script src="../blocked-work-manager.js"></script>
+    <link rel="stylesheet" href="../style.css?v=20251030">
+    <link rel="stylesheet" href="../project-board.css?v=20251030" onload="document.documentElement.style.visibility='visible'">
+    <link rel="stylesheet" href="../dow-viewer.css?v=20251030">
+    <link rel="stylesheet" href="../blocked-work.css?v=20251030">
+    <link rel="stylesheet" href="../cfd-chart.css?v=20251030">
+    <script src="../projects-data.js?v=20251030"></script>
+    <script src="../file-system.js?v=20251030"></script>
+    <script src="../api-client.js?v=20251030"></script>
+    <script src="../global-data.js?v=20251030"></script>
+    <script src="../dow-viewer.js?v=20251030"></script>
+    <script src="../blocked-work-manager.js?v=20251030"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="../cfd-chart.js"></script>
+    <script src="../cfd-chart.js?v=20251030"></script>
 </head>
 <body>
     <div class="project-board">
@@ -95,6 +95,12 @@
                         </button>
                     </div>
                     
+                    <button class="generate-task-btn" id="generateTaskBtn">
+                        <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd"/>
+                        </svg>
+                        Generate
+                    </button>
                     <button class="create-task-btn" id="createTaskBtn">
                         <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
                             <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"></path>
@@ -1202,6 +1208,109 @@
                 <div class="modal-footer">
                     <button class="btn btn-secondary" onclick="hideDeleteTaskConfirmation()">Cancel</button>
                     <button class="btn btn-danger" onclick="confirmDeleteTask()">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Task Description Input Modal -->
+    <div class="modal task-description-modal" id="taskDescriptionModal" style="display: none;">
+        <div class="modal-backdrop generate-modal-backdrop"></div>
+        <div class="modal-container generate-modal-container">
+            <div class="modal-content generate-modal-content">
+                <!-- Header -->
+                <div class="generate-modal-header">
+                    <h2 class="generate-modal-title">Generate Task with AI</h2>
+                    <button class="generate-modal-close" onclick="closeTaskDescriptionModal()">×</button>
+                </div>
+
+                <!-- Info Block -->
+                <div class="generate-info-block">
+                    <span class="generate-info-text">Describe your task and we'll generate a detailed prompt for your AI assistant</span>
+                </div>
+
+                <!-- Content Area -->
+                <div class="generate-content-area">
+                    <label for="taskDescriptionInput" style="display: block; margin-bottom: 12px; font-weight: 600; color: #374151; font-size: 14px;">Task Description</label>
+                    <textarea id="taskDescriptionInput" class="generate-prompt-text" placeholder="Example: Create a user authentication system with email and password login, password reset functionality, and session management..."></textarea>
+
+                    <button class="generate-copy-btn" id="generatePromptBtn" onclick="generatePromptFromDescription()" disabled data-tooltip="Please enter a task description">
+                        Generate Prompt
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Generate Task Prompt Modal -->
+    <div class="modal generate-prompt-modal" id="generatePromptModal" style="display: none;">
+        <div class="modal-backdrop"></div>
+        <div class="modal-container generate-modal-container">
+            <div class="modal-content generate-modal-content">
+                <!-- Header -->
+                <div class="generate-modal-header">
+                    <h2 class="generate-modal-title">Generated Prompt</h2>
+                    <button class="generate-modal-close" onclick="closeGeneratePromptModal()">×</button>
+                </div>
+
+                <!-- Info Block -->
+                <div class="generate-info-block">
+                    <span class="generate-info-text">Use this prompt in your AI assistant to generate a task</span>
+                </div>
+
+                <!-- Content Area (Prompt Text) -->
+                <div class="generate-content-area">
+                    <textarea id="generatePromptTextarea" class="generate-prompt-text" readonly>You are a task management assistant. Please create a detailed task based on the following description:
+
+[User will enter their task description here]
+
+The task should include:
+- A clear, concise title
+- Detailed description of the work to be done
+- Acceptance criteria (conditions that must be met)
+- Estimated time to complete (in hours)
+- Priority level (low, medium, high)
+- Any technical requirements or dependencies
+
+Please format the output as follows:
+Title: [Task title]
+Description: [Detailed description]
+Acceptance Criteria:
+- [Criterion 1]
+- [Criterion 2]
+- [Criterion 3]
+Estimated Time: [hours]
+Priority: [level]
+Technical Requirements: [if any]</textarea>
+                </div>
+
+                <!-- Copy Button -->
+                <button class="generate-copy-btn" id="generateCopyBtn" onclick="copyGeneratePrompt()">COPY</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Definition of Workflow Modal -->
+    <div class="modal generate-prompt-modal" id="dowModal" style="display: none;">
+        <div class="modal-backdrop generate-modal-backdrop" onclick="closeDowModal()"></div>
+        <div class="modal-container generate-modal-container">
+            <div class="modal-content generate-modal-content">
+                <!-- Header -->
+                <div class="generate-modal-header">
+                    <h2 class="generate-modal-title">Definition of Workflow (DoW)</h2>
+                    <button class="generate-modal-close" onclick="closeDowModal()">×</button>
+                </div>
+
+                <!-- Info Block -->
+                <div class="generate-info-block">
+                    <span class="generate-info-text">Kanban workflow policies and practices for this project</span>
+                </div>
+
+                <!-- Content Area -->
+                <div class="generate-content-area" style="padding-bottom: 24px;">
+                    <div id="dowContent" class="dow-content" style="max-height: 500px; overflow-y: auto; padding: 16px; background: #f9fafb; border-radius: 8px; font-size: 14px; line-height: 1.7;">
+                        <p style="text-align: center; color: #9ca3af;">Loading...</p>
+                    </div>
                 </div>
             </div>
         </div>

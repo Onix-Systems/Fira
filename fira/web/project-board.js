@@ -137,6 +137,12 @@ class ProjectBoard {
         if (createTaskBtn) {
             createTaskBtn.style.display = canEdit ? 'flex' : 'none';
         }
+
+        // Hide/show generate task button
+        const generateTaskBtn = document.getElementById('generateTaskBtn');
+        if (generateTaskBtn) {
+            generateTaskBtn.style.display = canEdit ? 'flex' : 'none';
+        }
         
         // Enable/disable task editing in modal
         const taskCards = document.querySelectorAll('.task-card');
@@ -624,6 +630,18 @@ class ProjectBoard {
             this.eventHandlers.set('createTaskBtn', createTaskHandler);
         }
 
+        // Generate task button
+        const generateTaskBtn = document.getElementById('generateTaskBtn');
+        if (generateTaskBtn) {
+            const generateTaskHandler = () => {
+                console.log('🎯 Generate task button clicked');
+                this.openGeneratePromptModal();
+            };
+            generateTaskBtn.addEventListener('click', generateTaskHandler);
+            this.eventHandlers = this.eventHandlers || new Map();
+            this.eventHandlers.set('generateTaskBtn', generateTaskHandler);
+        }
+
         // Add Developer button
         const addDeveloperBtn = document.getElementById('addDeveloperBtn');
         if (addDeveloperBtn) {
@@ -633,6 +651,17 @@ class ProjectBoard {
             addDeveloperBtn.addEventListener('click', addDeveloperHandler);
             this.eventHandlers = this.eventHandlers || new Map();
             this.eventHandlers.set('addDeveloperBtn', addDeveloperHandler);
+        }
+
+        // Workflow (Definition of Workflow) button
+        const dowBtn = document.getElementById('dowBtn');
+        if (dowBtn) {
+            const dowHandler = () => {
+                this.openWorkflowDefinitionModal();
+            };
+            dowBtn.addEventListener('click', dowHandler);
+            this.eventHandlers = this.eventHandlers || new Map();
+            this.eventHandlers.set('dowBtn', dowHandler);
         }
 
         // Blocked Only filter button
@@ -697,7 +726,7 @@ class ProjectBoard {
         // Simple approach: since we don't need to preserve any other listeners,
         // and the main problematic buttons are top-level, we can just clear their handlers
         // More sophisticated approach would be to track and remove specific listeners
-        const buttonIds = ['backButton', 'calculateDateBtn', 'analyticsBtn', 'viewSwitchBtn', 'createTaskBtn'];
+        const buttonIds = ['backButton', 'calculateDateBtn', 'analyticsBtn', 'viewSwitchBtn', 'createTaskBtn', 'generateTaskBtn'];
         
         buttonIds.forEach(buttonId => {
             const button = document.getElementById(buttonId);
@@ -1777,6 +1806,54 @@ class ProjectBoard {
 
         console.log('📝 Opened create task detail modal successfully');
         console.log('📝 Modal display style:', modal.style.display);
+    }
+
+    openGeneratePromptModal() {
+        console.log('🎯 openGeneratePromptModal called - opening task description modal');
+
+        const modal = document.getElementById('taskDescriptionModal');
+        if (!modal) {
+            console.error('❌ taskDescriptionModal not found in DOM');
+            return;
+        }
+
+        console.log('✅ Found taskDescriptionModal element:', modal);
+
+        // Clear previous input
+        const textarea = document.getElementById('taskDescriptionInput');
+        const generateBtn = document.getElementById('generatePromptBtn');
+
+        if (textarea) {
+            textarea.value = '';
+        }
+
+        // Initialize button state as disabled
+        if (generateBtn) {
+            generateBtn.disabled = true;
+
+            // Remove old event listener if exists
+            const newTextarea = textarea.cloneNode(true);
+            textarea.parentNode.replaceChild(newTextarea, textarea);
+
+            // Add input event listener to enable/disable button
+            newTextarea.addEventListener('input', function() {
+                const hasContent = newTextarea.value.trim().length > 0;
+                generateBtn.disabled = !hasContent;
+            });
+        }
+
+        // Save current scroll position
+        const scrollY = window.scrollY;
+        document.body.setAttribute('data-scroll-position', scrollY.toString());
+
+        // Add modal-open class to prevent scrolling
+        document.body.classList.add('modal-open');
+        document.body.style.top = `-${scrollY}px`;
+
+        // Show modal with flex display for proper centering
+        modal.style.display = 'flex';
+
+        console.log('📝 Opened task description modal successfully');
     }
     
     initializeCreateTaskModal() {
@@ -4573,9 +4650,68 @@ class ProjectBoard {
         }, 100);
     }
 
+    async openWorkflowDefinitionModal() {
+        console.log('📋 Opening Workflow Definition modal');
+
+        const modal = document.getElementById('dowModal');
+        const contentDiv = document.getElementById('dowContent');
+
+        if (!modal || !contentDiv) {
+            console.error('DoW modal elements not found');
+            return;
+        }
+
+        // Show modal
+        modal.style.display = 'flex';
+        document.body.classList.add('modal-open');
+
+        // Fetch and display the workflow definition
+        try {
+            const response = await fetch('/resources/Definition-of-Workflow.md');
+            if (!response.ok) {
+                throw new Error('Failed to fetch workflow definition');
+            }
+
+            const markdownText = await response.text();
+
+            // Simple markdown to HTML conversion
+            const htmlContent = this.convertMarkdownToHtml(markdownText);
+            contentDiv.innerHTML = htmlContent;
+        } catch (error) {
+            console.error('Error loading workflow definition:', error);
+            contentDiv.innerHTML = '<p style="color: #ef4444;">Failed to load workflow definition. Please try again.</p>';
+        }
+    }
+
+    convertMarkdownToHtml(markdown) {
+        let html = markdown;
+
+        // Convert headers
+        html = html.replace(/^### (.*$)/gim, '<h3 style="color: #1f2937; font-size: 16px; font-weight: 600; margin-top: 20px; margin-bottom: 10px;">$1</h3>');
+        html = html.replace(/^## (.*$)/gim, '<h2 style="color: #111827; font-size: 18px; font-weight: 700; margin-top: 24px; margin-bottom: 12px; border-bottom: 2px solid #e5e7eb; padding-bottom: 8px;">$1</h2>');
+        html = html.replace(/^# (.*$)/gim, '<h1 style="color: #111827; font-size: 24px; font-weight: 800; margin-bottom: 16px;">$1</h1>');
+
+        // Convert bold
+        html = html.replace(/\*\*(.*?)\*\*/gim, '<strong style="font-weight: 600; color: #374151;">$1</strong>');
+
+        // Convert lists
+        html = html.replace(/^\- (.*$)/gim, '<li style="margin-left: 20px; margin-bottom: 6px; color: #4b5563;">$1</li>');
+
+        // Wrap consecutive list items in ul
+        html = html.replace(/(<li[^>]*>.*<\/li>\n?)+/gim, '<ul style="margin: 10px 0;">$&</ul>');
+
+        // Convert paragraphs
+        html = html.replace(/^(?!<[h|l|u])(.*$)/gim, '<p style="margin: 8px 0; color: #374151;">$1</p>');
+
+        // Clean up empty paragraphs
+        html = html.replace(/<p[^>]*>\s*<\/p>/gim, '');
+
+        return html;
+    }
+
     setupAddDeveloperFormHandlers() {
         const form = document.getElementById('addDeveloperForm');
-        
+
         if (!form) {
             console.error('Add developer form not found');
             return;
@@ -5815,6 +5951,215 @@ function closeCreateTaskModal() {
     document.body.style.overflow = 'auto';
 }
 
+// Task Description Modal functions
+function closeTaskDescriptionModal() {
+    const modal = document.getElementById('taskDescriptionModal');
+    if (modal) {
+        // Hide modal
+        modal.style.display = 'none';
+
+        // Remove modal-open class
+        document.body.classList.remove('modal-open');
+
+        // Restore scroll position
+        const scrollY = document.body.getAttribute('data-scroll-position');
+        document.body.style.top = '';
+
+        if (scrollY) {
+            window.scrollTo(0, parseInt(scrollY, 10));
+            document.body.removeAttribute('data-scroll-position');
+        }
+    }
+}
+
+function generatePromptFromDescription() {
+    const textarea = document.getElementById('taskDescriptionInput');
+    const description = textarea ? textarea.value.trim() : '';
+
+    if (!description) {
+        return;
+    }
+
+    // Close the description modal
+    closeTaskDescriptionModal();
+
+    // Update the prompt with user's description
+    const promptTextarea = document.getElementById('generatePromptTextarea');
+    if (promptTextarea) {
+        const prompt = `${description}
+
+You are a task generator for the Fira project management system.
+Generate a task in Markdown format with YAML frontmatter based on my previous description.
+
+REQUIRED FORMAT:
+---
+title: [Clear, concise task title]
+estimate: [Time estimate: e.g., 2h, 4h, 1d, 2d]
+priority: [high/medium/low]
+status: backlog
+created: [Today's date in YYYY-MM-DD format]
+---
+
+# Description
+[Detailed explanation of what needs to be done]
+
+# Acceptance Criteria
+- [ ] [Specific, measurable criterion 1]
+- [ ] [Specific, measurable criterion 2]
+- [ ] [Specific, measurable criterion 3]
+
+# Technical Notes
+[Any technical details, considerations, or dependencies]
+
+# Resources
+[Links to documentation, examples, or related materials if applicable]
+
+GUIDELINES:
+- Title: Clear and actionable (e.g., "Implement user authentication")
+- Estimate: Realistic based on complexity
+- Priority: Based on urgency and impact
+- Status: Always "backlog" for new tasks
+- Description: Explain context and purpose
+- Acceptance Criteria: Use testable checkboxes
+- Keep it concise but informative
+- Use Markdown formatting`;
+
+        promptTextarea.value = prompt;
+    }
+
+    // Open the generate prompt modal
+    const modal = document.getElementById('generatePromptModal');
+    if (modal) {
+        // Save current scroll position
+        const scrollY = window.scrollY;
+        document.body.setAttribute('data-scroll-position', scrollY.toString());
+
+        // Add modal-open class to prevent scrolling
+        document.body.classList.add('modal-open');
+        document.body.style.top = `-${scrollY}px`;
+
+        // Show modal
+        modal.style.display = 'flex';
+    }
+}
+
+// Generate Prompt Modal functions
+function closeGeneratePromptModal() {
+    const modal = document.getElementById('generatePromptModal');
+    if (modal) {
+        // Hide modal
+        modal.style.display = 'none';
+
+        // Remove modal-open class
+        document.body.classList.remove('modal-open');
+
+        // Restore scroll position
+        const scrollY = document.body.getAttribute('data-scroll-position');
+        document.body.style.top = '';
+
+        if (scrollY) {
+            window.scrollTo(0, parseInt(scrollY, 10));
+            document.body.removeAttribute('data-scroll-position');
+        }
+    }
+}
+
+// DoW Modal functions
+function closeDowModal() {
+    const modal = document.getElementById('dowModal');
+    if (modal) {
+        // Hide modal
+        modal.style.display = 'none';
+
+        // Remove modal-open class
+        document.body.classList.remove('modal-open');
+
+        // Restore scroll position
+        const scrollY = document.body.getAttribute('data-scroll-position');
+        document.body.style.top = '';
+
+        if (scrollY) {
+            window.scrollTo(0, parseInt(scrollY, 10));
+            document.body.removeAttribute('data-scroll-position');
+        }
+    }
+}
+
+function copyGeneratePrompt() {
+    const textarea = document.getElementById('generatePromptTextarea');
+    if (!textarea) {
+        console.error('❌ Generate prompt textarea not found');
+        return;
+    }
+
+    // Copy text to clipboard
+    textarea.select();
+    textarea.setSelectionRange(0, 99999); // For mobile devices
+
+    try {
+        // Try using the modern clipboard API first
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(textarea.value).then(() => {
+                console.log('✅ Prompt copied to clipboard');
+                showCopySuccessToast();
+            }).catch(err => {
+                console.error('❌ Failed to copy using clipboard API:', err);
+                fallbackCopy();
+            });
+        } else {
+            fallbackCopy();
+        }
+    } catch (err) {
+        console.error('❌ Failed to copy:', err);
+        fallbackCopy();
+    }
+
+    function fallbackCopy() {
+        try {
+            const successful = document.execCommand('copy');
+            if (successful) {
+                console.log('✅ Prompt copied to clipboard (fallback)');
+                showCopySuccessToast();
+            } else {
+                console.error('❌ Copy command was unsuccessful');
+            }
+        } catch (err) {
+            console.error('❌ Fallback copy failed:', err);
+        }
+    }
+
+    function showCopySuccessToast() {
+        // Create a temporary toast notification
+        const toast = document.createElement('div');
+        toast.textContent = 'Prompt copied to clipboard!';
+        toast.style.cssText = `
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            z-index: 20000;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            animation: slideUp 0.3s ease;
+        `;
+
+        document.body.appendChild(toast);
+
+        // Remove toast after 2 seconds
+        setTimeout(() => {
+            toast.style.animation = 'slideDown 0.3s ease';
+            setTimeout(() => {
+                document.body.removeChild(toast);
+            }, 300);
+        }, 2000);
+    }
+}
+
 // Close modals when clicking outside
 const taskDetailModal = document.getElementById('taskDetailModal');
 if (taskDetailModal) {
@@ -5854,14 +6199,43 @@ if (addDeveloperModal) {
     });
 }
 
+// Task Description Modal backdrop click handler
+const taskDescriptionModal = document.getElementById('taskDescriptionModal');
+if (taskDescriptionModal) {
+    taskDescriptionModal.addEventListener('click', (e) => {
+        if (e.target.classList.contains('modal-backdrop') || e.target === e.currentTarget) {
+            closeTaskDescriptionModal();
+        }
+    });
+}
+
+// Generate Prompt Modal backdrop click handler
+const generatePromptModal = document.getElementById('generatePromptModal');
+if (generatePromptModal) {
+    generatePromptModal.addEventListener('click', (e) => {
+        if (e.target.classList.contains('modal-backdrop') || e.target === e.currentTarget) {
+            closeGeneratePromptModal();
+        }
+    });
+}
+
 // Handle escape key
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         // Check which modal is open and close it
         const addDeveloperModal = document.getElementById('addDeveloperModal');
         const editProjectModal = document.getElementById('editProjectModal');
-        
-        if (addDeveloperModal && addDeveloperModal.style.display === 'flex') {
+        const generatePromptModal = document.getElementById('generatePromptModal');
+        const taskDescriptionModal = document.getElementById('taskDescriptionModal');
+        const dowModal = document.getElementById('dowModal');
+
+        if (taskDescriptionModal && taskDescriptionModal.style.display === 'flex') {
+            closeTaskDescriptionModal();
+        } else if (generatePromptModal && generatePromptModal.style.display === 'flex') {
+            closeGeneratePromptModal();
+        } else if (dowModal && dowModal.style.display === 'flex') {
+            closeDowModal();
+        } else if (addDeveloperModal && addDeveloperModal.style.display === 'flex') {
             closeAddDeveloperModal();
         } else if (editProjectModal && editProjectModal.style.display === 'flex') {
             closeEditProjectModal();

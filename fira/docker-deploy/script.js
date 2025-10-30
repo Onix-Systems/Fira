@@ -573,11 +573,22 @@ function handleProjectClick(projectId) {
 // Delete project (show confirmation modal) - Legacy function for compatibility
 function deleteProject(event, projectId) {
     event.stopPropagation(); // Prevent card click event
+
+    // Show web version warning toast
+    if (window.showWebVersionWarning) {
+        window.showWebVersionWarning();
+    }
+
     openDeleteProjectModal(projectId);
 }
 
 // Open new project modal
 function openNewProjectModal() {
+    // Show web version warning toast
+    if (window.showWebVersionWarning) {
+        window.showWebVersionWarning();
+    }
+
     newProjectModal.style.display = 'flex';
     document.body.style.overflow = 'hidden'; // Prevent background scroll
 }
@@ -809,19 +820,24 @@ function clearFieldError(fieldId) {
 
 async function handleCreateProject(e) {
     e.preventDefault();
-    
+
+    // Show web version warning toast
+    if (window.showWebVersionWarning) {
+        window.showWebVersionWarning();
+    }
+
     const createBtn = document.getElementById('createProjectBtn');
     const btnText = createBtn.querySelector('.btn-text');
     const btnLoading = createBtn.querySelector('.btn-loading');
-    
+
     // Validate form
     const isNameValid = validateProjectName();
     const isIdValid = validateProjectId();
-    
+
     if (!isNameValid || !isIdValid) {
         return;
     }
-    
+
     // Get form data
     const formData = new FormData(e.target);
     const projectData = {
@@ -830,30 +846,30 @@ async function handleCreateProject(e) {
         description: formData.get('projectDescription') || 'No description provided',
         created: new Date().toISOString()
     };
-    
+
     try {
         // Show loading state
         createBtn.disabled = true;
         btnText.style.display = 'none';
         btnLoading.style.display = 'flex';
-        
+
         // Create project using global data manager (which will choose the right method)
         if (window.globalDataManager) {
             const result = await window.globalDataManager.createProject(projectData);
             if (!result.success) {
                 throw new Error(result.error || 'Failed to create project');
             }
-            
+
             // Update local data from global manager
             projectsData = window.globalDataManager.getProjects();
             filteredProjects = [...projectsData];
         } else {
             throw new Error('Global data manager not available');
         }
-        
+
         // Re-render projects
         renderProjects();
-        
+
         // Close modal and reset form
         closeModal();
         resetCreateProjectForm();
@@ -1362,6 +1378,11 @@ async function handleConfirmDelete() {
         console.log('🗑️ GlobalDataManager available:', !!window.globalDataManager);
         console.log('🗑️ API client available:', !!window.globalDataManager?.apiClient);
         
+        // Show web version warning toast
+        if (window.showWebVersionWarning) {
+            window.showWebVersionWarning();
+        }
+
         // Use GlobalDataManager for deletion (it handles both filesystem and server cases internally)
         if (window.globalDataManager) {
             console.log('🗑️ Using GlobalDataManager for deletion');
@@ -1372,7 +1393,7 @@ async function handleConfirmDelete() {
 
         // Store project name before closing modal
         const deletedProjectName = currentProjectToDelete.name;
-        
+
         // Видаляємо з локальних масивів
         const originalIndex = projectsData.findIndex(p => p.id === currentProjectToDelete.id);
         if (originalIndex !== -1) projectsData.splice(originalIndex, 1);

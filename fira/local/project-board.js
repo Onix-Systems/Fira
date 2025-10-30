@@ -5636,6 +5636,63 @@ class ProjectBoard {
         };
         return statusNames[status] || status;
     }
+
+    // Delete task functionality
+    async deleteTask(taskId) {
+        try {
+            console.log(`🗑️ Deleting task: ${taskId}`);
+
+            // Find the task to delete
+            const taskToDelete = this.tasks.find(task => task.id === taskId);
+            if (!taskToDelete) {
+                throw new Error(`Task ${taskId} not found`);
+            }
+
+            // Delete the task file from server FIRST
+            if (this.isWebVersion && window.globalDataManager && window.globalDataManager.apiClient) {
+                console.log(`🔄 Deleting task file for ${taskId} via API`);
+                await window.globalDataManager.apiClient.deleteTask(this.currentProject.id, taskId);
+                console.log(`✅ Task file deleted successfully for ${taskId}`);
+            }
+
+            // Remove from tasks array AFTER successful server deletion
+            this.tasks = this.tasks.filter(task => task.id !== taskId);
+            console.log(`🗑️ Removed task ${taskId} from tasks array. Remaining tasks: ${this.tasks.length}`);
+
+            // Also remove from filteredTasks
+            this.filteredTasks = this.filteredTasks.filter(task => task.id !== taskId);
+            console.log(`🗑️ Removed task ${taskId} from filteredTasks array. Remaining filtered tasks: ${this.filteredTasks.length}`);
+
+            // Close task detail modal if it's open for this task
+            if (this.currentTask && this.currentTask.id === taskId) {
+                console.log(`🚪 Closing modal for deleted task ${taskId}`);
+                const modal = document.getElementById('taskDetailModal');
+                if (modal) {
+                    modal.style.display = 'none';
+                    document.body.style.overflow = 'auto';
+                }
+                this.currentTask = null;
+            }
+
+            // Refresh using filterAndRenderTasks to update both filteredTasks and UI
+            console.log(`🔄 Re-rendering board after deletion using filterAndRenderTasks`);
+            this.filterAndRenderTasks();
+
+            console.log(`✅ Task ${taskId} deleted successfully`);
+
+            // Show success toast if available
+            if (window.showToast) {
+                window.showToast('Task deleted successfully', 'success');
+            }
+
+            return true;
+
+        } catch (error) {
+            console.error('❌ Error deleting task:', error);
+            alert(`Error deleting task: ${error.message}`);
+            return false;
+        }
+    }
 }
 
 // Modal close functions
@@ -7397,56 +7454,6 @@ class AssigneeDropdownManager {
         if (freshButtons[0]) {
             // Don't actually click, just log that we could
             console.log('🧪 First button is accessible and ready for clicks');
-        }
-    }
-
-    // Delete task functionality
-    async deleteTask(taskId) {
-        try {
-            console.log(`🗑️ Deleting task: ${taskId}`);
-
-            // Find the task to delete
-            const taskToDelete = this.tasks.find(task => task.id === taskId);
-            if (!taskToDelete) {
-                throw new Error(`Task ${taskId} not found`);
-            }
-
-            // Remove from tasks array
-            this.tasks = this.tasks.filter(task => task.id !== taskId);
-
-            // Delete the task file from server
-            if (this.isWebVersion && window.globalDataManager && window.globalDataManager.apiClient) {
-                console.log(`🔄 Deleting task file for ${taskId} via API`);
-                await window.globalDataManager.apiClient.deleteTask(this.currentProject.id, taskId);
-                console.log(`✅ Task file deleted successfully for ${taskId}`);
-            }
-
-            // Close task detail modal if it's open for this task
-            if (this.currentTask && this.currentTask.id === taskId) {
-                // Use global function
-                if (typeof closeTaskModal === 'function') {
-                    await closeTaskModal();
-                } else {
-                    // Fallback to direct modal close
-                    const modal = document.getElementById('taskDetailModal');
-                    if (modal) {
-                        modal.style.display = 'none';
-                        document.body.style.overflow = 'auto';
-                    }
-                    this.currentTask = null;
-                }
-            }
-
-            // Refresh the kanban board
-            this.renderBoard();
-
-            console.log(`✅ Task ${taskId} deleted successfully`);
-            return true;
-
-        } catch (error) {
-            console.error('❌ Error deleting task:', error);
-            alert(`Error deleting task: ${error.message}`);
-            return false;
         }
     }
 }

@@ -1,9 +1,11 @@
 /* Role-based UI styling */
-.viewer-mode .create-task-btn {
+.viewer-mode .create-task-btn,
+.viewer-mode .generate-task-btn {
     display: none !important;
 }
 
-.editor-mode .create-task-btn {
+.editor-mode .create-task-btn,
+.editor-mode .generate-task-btn {
     display: flex !important;
 }
 
@@ -220,6 +222,33 @@
     background: #047857;
     border-color: #047857;
     color: white;
+}
+
+/* DoW Button - Definition of Workflow viewer */
+.dow-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    color: #6b7280;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.dow-btn:hover {
+    background: #f9fafb;
+    border-color: #d1d5db;
+    color: #374151;
+}
+
+.dow-btn svg {
+    width: 16px;
+    height: 16px;
 }
 
 /* Create Task Button */
@@ -492,7 +521,7 @@
 .task-card {
     position: relative;
     width: calc(100% - 20px);
-    height: 90px;
+    min-height: 90px;  /* Changed from fixed height to min-height */
     margin: 0 auto 12px auto;
     background: #FFFFFF;
     box-shadow: 0px 0px 8px rgba(0, 0, 0, 0.25);
@@ -650,9 +679,13 @@
     color: #000000;
     margin: 0;
     flex: 1;
-    white-space: nowrap;
+    /* Allow text to wrap to multiple lines (max 2-3 lines) */
+    white-space: normal;
     overflow: hidden;
     text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     margin-bottom: 8px;
 }
 
@@ -921,6 +954,187 @@
     -webkit-text-fill-color: transparent;
     background-clip: text;
     text-fill-color: transparent;
+}
+
+/* Delete Task Button */
+.delete-task-button {
+    background: none;
+    border: none;
+    padding: 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    color: #6b7280;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.delete-task-button:hover {
+    background: #fee2e2;
+    color: #dc2626;
+    transform: scale(1.05);
+}
+
+.delete-task-button:active {
+    transform: scale(0.95);
+}
+
+/* Delete Confirmation Modal */
+.delete-confirmation-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2100;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.delete-confirmation-modal .modal-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(2px);
+}
+
+.delete-confirmation-modal .modal-container {
+    position: relative;
+    z-index: 2101;
+    background: #ffffff;
+    border-radius: 16px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15), 0 4px 20px rgba(0, 0, 0, 0.08);
+    border: 1px solid #e5e7eb;
+    width: 100%;
+    max-width: 400px;
+    margin: 0 20px;
+    overflow: hidden;
+    animation: modalSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    box-sizing: border-box;
+}
+
+.delete-confirmation-modal .modal-content {
+    padding: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.delete-confirmation-modal .modal-header {
+    padding: 32px 32px 24px 32px;
+    border-bottom: none;
+    background: #ffffff;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.delete-confirmation-modal .modal-header h2 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 600;
+    color: #374151;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.delete-confirmation-modal .modal-header h2::before {
+    content: "";
+    width: 44px;
+    height: 44px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Ccircle cx='12' cy='12' r='10' stroke='%23ef4444' stroke-width='1.5'/%3E%3Cpath d='M12 7v6' stroke='%23ef4444' stroke-width='2' stroke-linecap='round'/%3E%3Ccircle cx='12' cy='16' r='1' fill='%23ef4444'/%3E%3C/svg%3E") center/24px no-repeat;
+    background-color: #fef2f2;
+    border-radius: 50%;
+    flex-shrink: 0;
+    border: none;
+}
+
+.delete-confirmation-modal .modal-body {
+    padding: 0 32px 28px 32px;
+    color: #6b7280;
+    font-size: 15px;
+    line-height: 1.6;
+    background: #ffffff;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.delete-confirmation-modal .modal-body p {
+    margin: 0;
+}
+
+.delete-confirmation-modal .modal-footer {
+    padding: 24px 32px 32px 32px;
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    border-top: none;
+    background: #ffffff;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.delete-confirmation-modal .btn {
+    padding: 12px 20px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 90px;
+    font-family: inherit;
+    outline: none;
+    position: relative;
+}
+
+.delete-confirmation-modal .btn-secondary {
+    background: #ffffff;
+    color: #6b7280;
+    border-color: #d1d5db;
+}
+
+.delete-confirmation-modal .btn-secondary:hover {
+    background: #f9fafb;
+    color: #374151;
+    border-color: #9ca3af;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.delete-confirmation-modal .btn-danger {
+    background: #ef4444;
+    color: white;
+    border-color: #ef4444;
+}
+
+.delete-confirmation-modal .btn-danger:hover {
+    background: #dc2626;
+    border-color: #dc2626;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+}
+
+.delete-confirmation-modal .btn:active {
+    transform: translateY(0);
+    transition: transform 0.1s;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: scale(0.8) translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
 }
 
 .task-modal-actions {
@@ -3983,6 +4197,41 @@
     justify-content: space-between;
     padding: 0 16px;
     box-sizing: border-box;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.figma-column-header:hover {
+    background: #C9C9C9;
+}
+
+.figma-header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.column-sort-arrow {
+    color: #666;
+    transition: transform 0.2s ease, color 0.2s ease;
+    opacity: 0.6;
+}
+
+.figma-column-header:hover .column-sort-arrow {
+    opacity: 1;
+    color: #333;
+}
+
+.figma-column-header[data-sort="asc"] .column-sort-arrow {
+    transform: rotate(0deg);
+    opacity: 1;
+    color: #333;
+}
+
+.figma-column-header[data-sort="desc"] .column-sort-arrow {
+    transform: rotate(180deg);
+    opacity: 1;
+    color: #333;
 }
 
 .figma-column-title {
@@ -4120,147 +4369,436 @@
     }
 }
 
-/* Delete Task Confirmation Modal */
-.delete-confirmation-modal {
+/* WIP Limits and Cycle Time Styles */
+.column-wip-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.85em;
+    font-weight: 600;
+}
+
+.column-wip-indicator.wip-ok {
+    background-color: #e8f5e9;
+    color: #2e7d32;
+    border: 1px solid #a5d6a7;
+}
+
+.column-wip-indicator.wip-warning {
+    background-color: #fff3e0;
+    color: #e65100;
+    border: 1px solid #ffb74d;
+    animation: pulse-warning 2s ease-in-out infinite;
+}
+
+.column-wip-indicator.wip-blocked {
+    background-color: #ffebee;
+    color: #c62828;
+    border: 1px solid #ef5350;
+    animation: pulse-critical 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-warning {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(230, 81, 0, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 0 8px rgba(230, 81, 0, 0);
+    }
+}
+
+@keyframes pulse-critical {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(198, 40, 40, 0.6);
+    }
+    50% {
+        box-shadow: 0 0 0 10px rgba(198, 40, 40, 0);
+    }
+}
+
+.task-age-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.75em;
+    font-weight: 600;
+    margin-left: 8px;
+}
+
+.task-age-badge.age-fresh {
+    background-color: #e8f5e9;
+    color: #2e7d32;
+}
+
+.task-age-badge.age-warning {
+    background-color: #fff3e0;
+    color: #e65100;
+}
+
+.task-age-badge.age-critical {
+    background-color: #ffebee;
+    color: #c62828;
+    animation: pulse-warning 2s ease-in-out infinite;
+}
+
+.task-cycle-time {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background-color: #f5f5f5;
+    border-radius: 6px;
+    font-size: 0.85em;
+    margin-top: 8px;
+}
+
+.task-cycle-time.within-sle {
+    background-color: #e8f5e9;
+    color: #2e7d32;
+}
+
+.task-cycle-time.exceeds-sle {
+    background-color: #fff3e0;
+    color: #e65100;
+}
+
+/* Icons removed - clean design without emojis */
+
+.wip-limit-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.wip-count-display {
+    font-size: 0.9em;
+    font-weight: 600;
+    color: #666;
+}
+
+/* Task card enhanced with age info */
+.task-card {
+    position: relative;
+}
+
+.task-card.aging-warning {
+    border-left: 4px solid #ff9800;
+}
+
+.task-card.aging-critical {
+    border-left: 4px solid #f44336;
+    box-shadow: 0 2px 8px rgba(244, 67, 54, 0.2);
+}
+
+.task-metadata-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 8px;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* ==================== Generate Task Button ==================== */
+.generate-task-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-right: 12px;
+    box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
+}
+
+.generate-task-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+    background: linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%);
+}
+
+.generate-task-btn:active {
+    transform: translateY(0);
+}
+
+.generate-task-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* ==================== Generate Prompt Modal ==================== */
+/* Prevent background scroll when modal is open */
+body.modal-open {
+    overflow: hidden !important;
+    position: fixed;
+    width: 100%;
+    height: 100%;
+}
+
+.generate-prompt-modal {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 2100;
+    z-index: 10000;
     display: none;
     align-items: center;
     justify-content: center;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-.delete-confirmation-modal .modal-backdrop {
+.generate-prompt-modal .modal-backdrop {
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(2px);
+    background: rgba(0, 0, 0, 0.5);
 }
 
-.delete-confirmation-modal .modal-container {
+.generate-modal-container {
     position: relative;
-    z-index: 2101;
+    z-index: 10001;
+    max-width: 850px;
+    max-height: 90vh;
+    margin: 20px auto;
+    animation: modalSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.generate-modal-content {
     background: #ffffff;
     border-radius: 16px;
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15), 0 4px 20px rgba(0, 0, 0, 0.08);
+    position: relative;
+    width: 100%;
+    box-sizing: border-box;
     border: 1px solid #e5e7eb;
-    width: 100%;
-    max-width: 400px;
-    margin: 0 20px;
-    overflow: hidden;
-    animation: modalSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    box-sizing: border-box;
-}
-
-.delete-confirmation-modal .modal-content {
     padding: 0;
-    width: 100%;
-    display: flex;
-    flex-direction: column;
+    overflow: hidden;
 }
 
-.delete-confirmation-modal .modal-header {
-    padding: 32px 32px 24px 32px;
-    border-bottom: none;
+/* Header */
+.generate-modal-header {
     background: #ffffff;
-    width: 100%;
-    box-sizing: border-box;
+    padding: 32px 32px 24px 32px;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
-.delete-confirmation-modal .modal-header h2 {
-    margin: 0;
+.generate-modal-title {
     font-size: 22px;
     font-weight: 600;
     color: #374151;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.delete-confirmation-modal .modal-header h2::before {
-    content: "";
-    width: 44px;
-    height: 44px;
-    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Ccircle cx='12' cy='12' r='10' stroke='%23ef4444' stroke-width='1.5'/%3E%3Cpath d='M12 7v6' stroke='%23ef4444' stroke-width='2' stroke-linecap='round'/%3E%3Ccircle cx='12' cy='16' r='1' fill='%23ef4444'/%3E%3C/svg%3E") center/24px no-repeat;
-    background-color: #fef2f2;
-    border-radius: 50%;
-    flex-shrink: 0;
-    border: none;
-}
-
-.delete-confirmation-modal .modal-body {
-    padding: 0 32px 28px 32px;
-    color: #6b7280;
-    font-size: 15px;
-    line-height: 1.6;
-    background: #ffffff;
-    width: 100%;
-    box-sizing: border-box;
-}
-
-.delete-confirmation-modal .modal-body p {
     margin: 0;
 }
 
-.delete-confirmation-modal .modal-footer {
-    padding: 24px 32px 32px 32px;
+.generate-modal-close {
+    background: transparent;
+    border: none;
+    font-size: 24px;
+    color: #9ca3af;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
     display: flex;
-    gap: 12px;
-    justify-content: flex-end;
-    border-top: none;
-    background: #ffffff;
-    width: 100%;
-    box-sizing: border-box;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    line-height: 1;
 }
 
-.delete-confirmation-modal .btn {
-    padding: 12px 20px;
-    border: 1px solid transparent;
-    border-radius: 10px;
+.generate-modal-close:hover {
+    color: #374151;
+}
+
+.generate-modal-close:active {
+    transform: scale(0.95);
+}
+
+/* Info Block */
+.generate-info-block {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin: 24px 32px 20px 32px;
+}
+
+.generate-info-text {
     font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    min-width: 90px;
-    font-family: inherit;
+    color: #6b7280;
+    line-height: 1.5;
+}
+
+/* Content Area */
+.generate-content-area {
+    background: #ffffff;
+    padding: 0 32px;
+    margin: 0 0 32px 0;
+    padding-bottom: 32px;
+}
+
+.generate-prompt-text {
+    width: 100%;
+    min-height: 300px;
+    max-height: 400px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    color: #374151;
+    font-size: 14px;
+    line-height: 1.7;
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+    resize: vertical;
     outline: none;
+    padding: 16px;
+    box-sizing: border-box;
+    transition: all 0.2s ease;
+    overflow-y: auto;
+}
+
+.generate-prompt-text:focus {
+    background: #ffffff;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.generate-prompt-text::-webkit-scrollbar {
+    width: 8px;
+}
+
+.generate-prompt-text::-webkit-scrollbar-track {
+    background: #f3f4f6;
+    border-radius: 4px;
+}
+
+.generate-prompt-text::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 4px;
+}
+
+.generate-prompt-text::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+}
+
+/* Copy Button */
+.generate-copy-btn {
+    background: #3b82f6;
+    border: none;
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    cursor: pointer;
+    padding: 10px 20px;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 16px;
+    margin-right: 16px;
+    float: right;
+}
+
+.generate-copy-btn:hover {
+    background: #2563eb;
+}
+
+.generate-copy-btn:active {
+    transform: scale(0.98);
+}
+
+.generate-copy-btn:disabled {
+    background: #9ca3af;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.generate-copy-btn:disabled:hover {
+    background: #9ca3af;
+    transform: none;
+}
+
+/* Tooltip for disabled button */
+.generate-copy-btn[data-tooltip] {
     position: relative;
 }
 
-.delete-confirmation-modal .btn-secondary {
-    background: #ffffff;
-    color: #6b7280;
-    border-color: #d1d5db;
+.generate-copy-btn[data-tooltip]:disabled::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    right: 0;
+    background: #1f2937;
+    color: #ffffff;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    margin-bottom: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
-.delete-confirmation-modal .btn-secondary:hover {
-    background: #f9fafb;
-    color: #374151;
-    border-color: #9ca3af;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+.generate-copy-btn[data-tooltip]:disabled:hover::after {
+    opacity: 1;
 }
 
-.delete-confirmation-modal .btn-danger {
-    background: #ef4444;
-    color: white;
-    border-color: #ef4444;
-}
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .generate-modal-container {
+        max-height: 95vh;
+        margin: 10px;
+    }
 
-.delete-confirmation-modal .btn-danger:hover {
-    background: #dc2626;
-    border-color: #dc2626;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 12px rgba(239, 68, 68, 0.3);
-}
+    .generate-modal-header {
+        padding: 24px 20px 20px 20px;
+    }
 
-.delete-confirmation-modal .btn:active {
-    transform: translateY(0);
+    .generate-modal-title {
+        font-size: 20px;
+    }
+
+    .generate-info-block {
+        margin: 20px 20px 16px 20px;
+        padding: 12px 14px;
+    }
+
+    .generate-content-area {
+        padding: 0 20px;
+        margin: 0 0 24px 0;
+        padding-bottom: 24px;
+    }
+
+    .generate-prompt-text {
+        min-height: 250px;
+        font-size: 13px;
+        padding: 12px;
+    }
+
+    .generate-copy-btn {
+        font-size: 13px;
+        padding: 10px 20px;
+        margin-right: 0;
+    }
 }
