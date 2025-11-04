@@ -867,6 +867,200 @@ class FiraAPIClient {
             throw error;
         }
     }
+
+    /**
+     * Upload image for a task
+     * @param {string} projectId - Project ID
+     * @param {string} taskId - Task ID
+     * @param {FormData} formData - FormData containing image file
+     * @returns {Promise<Object>} Upload result with URLs
+     */
+    async uploadImage(projectId, taskId, formData) {
+        const url = `${this.baseUrl}/api/projects/${projectId}/tasks/${taskId}/images`;
+
+        try {
+            console.log(`📤 Uploading image to: ${url}`);
+
+            const response = await fetch(url, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `Upload failed: ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            console.log('✅ Image uploaded successfully:', result);
+            return result;
+
+        } catch (error) {
+            console.error('❌ Upload error:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get all images for a task
+     * @param {string} projectId - Project ID
+     * @param {string} taskId - Task ID
+     * @returns {Promise<Object>} List of images
+     */
+    async getTaskImages(projectId, taskId) {
+        const url = `${this.baseUrl}/api/projects/${projectId}/tasks/${taskId}/images`;
+
+        try {
+            console.log(`📥 Fetching images from: ${url}`);
+
+            const response = await fetch(url, {
+                method: 'GET'
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to fetch images: ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            console.log(`✅ Fetched ${result.images?.length || 0} images`);
+            return result;
+
+        } catch (error) {
+            console.error('❌ Error fetching images:', error);
+            return { success: false, images: [] };
+        }
+    }
+
+    /**
+     * Delete an image
+     * @param {string} projectId - Project ID
+     * @param {string} taskId - Task ID
+     * @param {string} filename - Image filename
+     * @returns {Promise<Object>} Delete result
+     */
+    async deleteImage(projectId, taskId, filename) {
+        const url = `${this.baseUrl}/api/projects/${projectId}/images/${taskId}/${filename}`;
+
+        try {
+            console.log(`🗑️ Deleting image: ${url}`);
+
+            const response = await fetch(url, {
+                method: 'DELETE'
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to delete image');
+            }
+
+            const result = await response.json();
+            console.log('✅ Image deleted successfully');
+            return result;
+
+        } catch (error) {
+            console.error('❌ Delete error:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Upload attachment to task
+     * @param {string} projectId - Project ID
+     * @param {string} taskId - Task ID
+     * @param {FormData} formData - FormData containing file
+     * @returns {Promise<Object>} Upload result with file info
+     */
+    async uploadAttachment(projectId, taskId, formData) {
+        const url = `${this.baseUrl}/api/projects/${projectId}/tasks/${taskId}/attachments`;
+
+        try {
+            console.log(`📎 Uploading attachment to: ${url}`);
+
+            const response = await fetch(url, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to upload attachment');
+            }
+
+            const result = await response.json();
+            console.log('✅ Attachment uploaded:', result);
+            return result;
+
+        } catch (error) {
+            console.error('❌ Upload error:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Get list of attachments for a task
+     * @param {string} projectId - Project ID
+     * @param {string} taskId - Task ID
+     * @returns {Promise<Object>} List of attachments
+     */
+    async getTaskAttachments(projectId, taskId) {
+        const url = `${this.baseUrl}/api/projects/${projectId}/tasks/${taskId}/attachments`;
+
+        try {
+            console.log(`📋 Fetching attachments from: ${url}`);
+
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to fetch attachments');
+            }
+
+            const result = await response.json();
+            console.log('✅ Attachments fetched:', result);
+            return result;
+
+        } catch (error) {
+            console.error('❌ Fetch attachments error:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Delete attachment from task
+     * @param {string} projectId - Project ID
+     * @param {string} taskId - Task ID
+     * @param {string} filename - Attachment filename
+     * @returns {Promise<Object>} Delete result
+     */
+    async deleteAttachment(projectId, taskId, filename) {
+        const url = `${this.baseUrl}/api/projects/${projectId}/tasks/${taskId}/attachments/${filename}`;
+
+        try {
+            console.log(`🗑️ Deleting attachment: ${url}`);
+
+            const response = await fetch(url, {
+                method: 'DELETE'
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to delete attachment');
+            }
+
+            const result = await response.json();
+            console.log('✅ Attachment deleted successfully');
+            return result;
+
+        } catch (error) {
+            console.error('❌ Delete attachment error:', error);
+            throw error;
+        }
+    }
 }
 
 // Global API client instance

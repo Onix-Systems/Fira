@@ -1679,10 +1679,39 @@ class ProjectBoard {
         // Show modal
         modal.style.display = 'flex';
         document.body.style.overflow = 'hidden';
-        
+
         // Set up modal event listeners
         this.setupTaskModalEventListeners(task);
-        
+
+        // Initialize image gallery for this task
+        this.initializeImageGallery(task);
+
+        // Initialize AttachmentsManager for existing task
+        if (window.AttachmentsManager) {
+            const projectId = this.currentProject ? this.currentProject.id : null;
+            const taskId = task.id;
+
+            if (projectId && taskId) {
+                const container = document.getElementById('attachmentsContainer');
+                if (container) {
+                    this.attachmentsManager = new window.AttachmentsManager(projectId, taskId);
+                    try {
+                        // Load existing attachments from server
+                        this.attachmentsManager.init(container)
+                            .then(() => console.log('✅ Initialized AttachmentsManager for existing task'))
+                            .catch(error => console.error('❌ Error initializing attachments:', error));
+                    } catch (error) {
+                        console.error('❌ Error initializing attachments for existing task:', error);
+                    }
+                } else {
+                    console.warn('⚠️ attachmentsContainer not found in DOM');
+                }
+            }
+        }
+
+        // Setup clipboard paste for images
+        this.setupClipboardPaste();
+
         // Update URL AFTER modal is shown to prevent navigation interference
         if (shouldUpdateUrl && window.firaRouter && this.currentProject) {
             const currentParams = window.firaRouter.getCurrentParams();
@@ -1908,7 +1937,32 @@ class ProjectBoard {
 
         // Update assignee dropdown with current project developers (force refresh to get latest)
         this.updateAssigneeDropdown('Unassigned', true).catch(console.error);
-        
+
+        // Initialize AttachmentsManager for new task
+        if (window.AttachmentsManager) {
+            const projectId = this.currentProject ? this.currentProject.id : null;
+            const taskId = this.currentTask.id;
+
+            if (projectId && taskId) {
+                const container = document.getElementById('createAttachmentsContainer');
+                if (container) {
+                    this.attachmentsManager = new window.AttachmentsManager(projectId, taskId);
+                    try {
+                        // Initialize with empty attachments list
+                        this.attachmentsManager.container = container;
+                        this.attachmentsManager.attachments = [];
+                        this.attachmentsManager.render();
+                        this.attachmentsManager.setupEventListeners();
+                        console.log('✅ Initialized AttachmentsManager for new task');
+                    } catch (error) {
+                        console.error('❌ Error initializing attachments for new task:', error);
+                    }
+                } else {
+                    console.warn('⚠️ createAttachmentsContainer not found in DOM');
+                }
+            }
+        }
+
         // Set preview mode as default
         const editBtn = document.getElementById('createEditModeBtn');
         const previewBtn = document.getElementById('createPreviewModeBtn');
@@ -2015,6 +2069,10 @@ class ProjectBoard {
         const taskContent = task.fullContent || task.content || 'No description available.';
         
         descriptionPreview.innerHTML = this.convertMarkdownToHTML(taskContent);
+
+        // Setup image resize functionality
+        this.setupImageResize(descriptionPreview);
+
         descriptionEditor.value = taskContent;
         
         // Update right panel fields
@@ -2449,6 +2507,9 @@ class ProjectBoard {
 
                 // Update preview with current editor content
                 descriptionPreview.innerHTML = this.convertMarkdownToHTML(descriptionEditor.value);
+
+                // Setup image resize functionality
+                this.setupImageResize(descriptionPreview);
             });
         }
 
@@ -2464,6 +2525,9 @@ class ProjectBoard {
             // Update preview with current editor content
             if (descriptionPreview && descriptionEditor) {
                 descriptionPreview.innerHTML = this.convertMarkdownToHTML(descriptionEditor.value);
+
+                // Setup image resize functionality
+                this.setupImageResize(descriptionPreview);
             }
         }
         
@@ -3072,6 +3136,10 @@ class ProjectBoard {
                 // Open file picker for image upload
                 this.openImagePicker(editor);
                 return; // Early return - no need to process replacement
+            case 'attachment':
+                // Open file picker for attachments
+                this.openAttachmentPicker();
+                return; // Early return - no need to process replacement
         }
         
         // Handle complex replacements for lists, quotes, and headings that return full text
@@ -3124,6 +3192,9 @@ class ProjectBoard {
         const preview = document.getElementById('taskDescriptionPreview');
         if (editor && preview) {
             preview.innerHTML = this.convertMarkdownToHTML(editor.value);
+
+            // Setup image resize functionality
+            this.setupImageResize(preview);
         }
     }
     
@@ -3465,67 +3536,94 @@ class ProjectBoard {
         activityFeed.scrollTop = activityFeed.scrollHeight;
     }
     
-    async handleImageUpload(file, targetEditor = null) {
-        if (!file) return;
-        
-        if (!file.type.startsWith('image/')) {
-            this.showMessage('Please select an image file', 'error');
-            return;
-        }
-        
+    async handleImageUpload(files, targetEditor = null) {
+        // Support both single file and multiple files
+        const fileArray = files instanceof FileList ? Array.from(files) : [files].filter(Boolean);
+
+        if (fileArray.length === 0) return;
+
         if (!this.currentProject) {
             this.showMessage('No project selected', 'error');
             return;
         }
-        
-        this.showMessage('Uploading image...', 'info');
-        
-        try {
-            // Create FormData for file upload
-            const formData = new FormData();
-            formData.append('image', file);
-            
-            // Upload to server
-            const response = await fetch(`/api/projects/${encodeURIComponent(this.currentProject.id)}/upload-image`, {
-                method: 'POST',
-                body: formData
-            });
-            
-            const result = await response.json();
-            
-            if (result.success) {
-                this.showMessage('Image uploaded successfully!', 'success');
-                
-                // Insert markdown into the target editor
-                if (targetEditor) {
-                    this.insertTextAtCursor(targetEditor, result.markdown);
-                } else {
-                    // Default to task description editor if available
-                    const descriptionEditor = document.getElementById('taskDescriptionEditor') || 
-                                             document.getElementById('createTaskDescriptionEditor');
-                    if (descriptionEditor) {
-                        this.insertTextAtCursor(descriptionEditor, result.markdown);
-                    }
-                }
-                
-                // Auto-save the current task after image is added
-                if (this.currentTask) {
-                    console.log('💾 Auto-saving task after image upload...');
-                    this.saveTaskChanges(this.currentTask, { closeAfterSave: false })
-                        .then(() => console.log('✅ Task auto-saved after image upload'))
-                        .catch(err => console.error('❌ Failed to auto-save task after image upload:', err));
-                }
-                
-                return result;
-            } else {
-                this.showMessage(`Upload failed: ${result.error}`, 'error');
-                return null;
-            }
-        } catch (error) {
-            console.error('Image upload error:', error);
-            this.showMessage(`Upload failed: ${error.message}`, 'error');
-            return null;
+
+        // Get current task ID (from modal)
+        const taskId = this.currentTask?.id;
+        if (!taskId) {
+            this.showMessage('Please save the task first before uploading images', 'error');
+            return;
         }
+
+        this.showMessage(`Uploading ${fileArray.length} image(s)...`, 'info');
+
+        const results = [];
+
+        for (const file of fileArray) {
+            if (!file.type.startsWith('image/')) {
+                this.showMessage(`Skipping ${file.name}: not an image file`, 'warning');
+                continue;
+            }
+
+            try {
+                // Create FormData for file upload
+                const formData = new FormData();
+                formData.append('image', file);
+
+                // Get API client (support both versions)
+                const apiClient = window.firaAPIClient || window.apiClient;
+                if (!apiClient) {
+                    throw new Error('API client not available');
+                }
+
+                // Upload to server using task-specific endpoint
+                const response = await apiClient.uploadImage(
+                    this.currentProject.id,
+                    taskId,
+                    formData
+                );
+
+                if (response.success) {
+                    results.push(response);
+
+                    // Insert markdown into the target editor
+                    if (targetEditor) {
+                        this.insertTextAtCursor(targetEditor, response.markdown + '\n');
+                    } else {
+                        // Default to task description editor if available
+                        const descriptionEditor = document.getElementById('taskDescriptionEditor') ||
+                                                 document.getElementById('createTaskDescriptionEditor');
+                        if (descriptionEditor) {
+                            this.insertTextAtCursor(descriptionEditor, response.markdown + '\n');
+                        }
+                    }
+
+                    // Reload gallery to show new image
+                    if (window.imageGallery) {
+                        await window.imageGallery.loadImages(this.currentProject.id, taskId);
+                    }
+
+                } else {
+                    this.showMessage(`Upload failed for ${file.name}: ${response.error}`, 'error');
+                }
+            } catch (error) {
+                console.error('Image upload error:', error);
+                this.showMessage(`Upload failed for ${file.name}: ${error.message}`, 'error');
+            }
+        }
+
+        if (results.length > 0) {
+            this.showMessage(`Successfully uploaded ${results.length} image(s)!`, 'success');
+
+            // Auto-save the current task after images are added
+            if (this.currentTask) {
+                console.log('💾 Auto-saving task after image upload...');
+                this.saveTaskChanges(this.currentTask, { closeAfterSave: false })
+                    .then(() => console.log('✅ Task auto-saved after image upload'))
+                    .catch(err => console.error('❌ Failed to auto-save task after image upload:', err));
+            }
+        }
+
+        return results;
     }
     
     insertTextAtCursor(editor, text) {
@@ -3548,31 +3646,33 @@ class ProjectBoard {
     setupImageDropZone(inputId, editorId) {
         const fileInput = document.getElementById(inputId);
         const editor = document.getElementById(editorId);
-        
+
         if (!fileInput || !editor) return;
-        
+
         // Find the drop zone (parent of file input)
         const dropZone = fileInput.closest('.image-drop-zone');
         if (!dropZone) return;
-        
+
         // Click to select file
         dropZone.addEventListener('click', () => {
             fileInput.click();
         });
-        
-        // File input change
+
+        // File input change - support multiple files
         fileInput.addEventListener('change', (e) => {
-            if (e.target.files && e.target.files[0]) {
-                this.handleImageUpload(e.target.files[0], editor);
+            if (e.target.files && e.target.files.length > 0) {
+                this.handleImageUpload(e.target.files, editor);
+                // Reset input to allow selecting the same file again
+                e.target.value = '';
             }
         });
-        
+
         // Drag and drop events
         dropZone.addEventListener('dragover', (e) => {
             e.preventDefault();
             dropZone.classList.add('drag-over');
         });
-        
+
         dropZone.addEventListener('dragleave', (e) => {
             e.preventDefault();
             // Only remove if we're leaving the drop zone itself, not a child
@@ -3580,14 +3680,14 @@ class ProjectBoard {
                 dropZone.classList.remove('drag-over');
             }
         });
-        
+
         dropZone.addEventListener('drop', (e) => {
             e.preventDefault();
             dropZone.classList.remove('drag-over');
-            
+
             const files = e.dataTransfer.files;
-            if (files && files[0]) {
-                this.handleImageUpload(files[0], editor);
+            if (files && files.length > 0) {
+                this.handleImageUpload(files, editor);
             }
         });
     }
@@ -3597,19 +3697,135 @@ class ProjectBoard {
         const fileInput = document.createElement('input');
         fileInput.type = 'file';
         fileInput.accept = 'image/*';
+        fileInput.multiple = true;
         fileInput.style.display = 'none';
-        
+
         fileInput.addEventListener('change', (e) => {
-            if (e.target.files && e.target.files[0]) {
-                this.handleImageUpload(e.target.files[0], targetEditor);
+            if (e.target.files && e.target.files.length > 0) {
+                this.handleImageUpload(e.target.files, targetEditor);
             }
             // Clean up
             document.body.removeChild(fileInput);
         });
-        
+
         // Add to DOM and trigger click
         document.body.appendChild(fileInput);
         fileInput.click();
+    }
+
+    openAttachmentPicker() {
+        // Determine which modal is active by checking display style
+        const editModal = document.getElementById('taskDetailModal');
+        const createModal = document.getElementById('createTaskDetailModal');
+
+        let activeModal = null;
+        let containerSelector = null;
+
+        // Check edit modal (display: flex when open)
+        if (editModal && editModal.style.display === 'flex') {
+            activeModal = editModal;
+            containerSelector = '#attachmentsContainer';
+            console.log('📝 Edit modal is active');
+        }
+        // Check create modal (display: flex when open)
+        else if (createModal && createModal.style.display === 'flex') {
+            activeModal = createModal;
+            containerSelector = '#createAttachmentsContainer';
+            console.log('🆕 Create modal is active');
+        }
+
+        if (!activeModal) {
+            console.warn('⚠️ No active modal found');
+            console.log('Debug: editModal.style.display =', editModal?.style.display);
+            console.log('Debug: createModal.style.display =', createModal?.style.display);
+            return;
+        }
+
+        // Search for file input within the active modal
+        const attachmentFileInput = activeModal.querySelector(`${containerSelector} #attachmentFileInput`);
+
+        if (attachmentFileInput) {
+            console.log('✅ Found attachmentFileInput, opening file picker...');
+            attachmentFileInput.click();
+        } else {
+            // If not loaded yet, scroll to attachments section
+            const attachmentsContainer = activeModal.querySelector(containerSelector);
+            if (attachmentsContainer) {
+                attachmentsContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                console.log('📎 Scroll to attachments section. Please use the upload zone below.');
+            } else {
+                console.warn('⚠️ Attachments section not found. Container selector:', containerSelector);
+            }
+        }
+    }
+
+    /**
+     * Initialize image gallery for a task
+     */
+    initializeImageGallery(task) {
+        if (!task || !this.currentProject) return;
+
+        console.log('📸 Initializing image gallery for task:', task.id);
+
+        // Initialize gallery instance if not exists
+        if (!window.imageGallery) {
+            window.imageGallery = new ImageGallery('imageGalleryContainer');
+        }
+
+        // Load images for this task
+        if (window.apiClient) {
+            window.imageGallery.loadImages(this.currentProject.id, task.id)
+                .then(() => console.log('✅ Gallery images loaded'))
+                .catch(err => console.error('❌ Failed to load gallery images:', err));
+        }
+    }
+
+    /**
+     * Setup clipboard paste support for images
+     */
+    setupClipboardPaste() {
+        // Remove existing listener if any
+        if (this.clipboardPasteHandler) {
+            document.removeEventListener('paste', this.clipboardPasteHandler);
+        }
+
+        this.clipboardPasteHandler = async (e) => {
+            // Only handle paste when modal is open
+            const modal = document.getElementById('taskDetailModal');
+            const createModal = document.getElementById('createTaskDetailModal');
+
+            if ((!modal || modal.style.display !== 'flex') &&
+                (!createModal || createModal.style.display !== 'flex')) {
+                return;
+            }
+
+            const items = e.clipboardData?.items;
+            if (!items) return;
+
+            const imageFiles = [];
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf('image') !== -1) {
+                    const blob = items[i].getAsFile();
+                    if (blob) {
+                        imageFiles.push(blob);
+                    }
+                }
+            }
+
+            if (imageFiles.length > 0) {
+                e.preventDefault();
+
+                // Get the active editor
+                const descriptionEditor = document.getElementById('taskDescriptionEditor') ||
+                                         document.getElementById('createTaskDescriptionEditor');
+
+                console.log('📋 Pasted', imageFiles.length, 'image(s) from clipboard');
+                await this.handleImageUpload(imageFiles, descriptionEditor);
+            }
+        };
+
+        document.addEventListener('paste', this.clipboardPasteHandler);
+        console.log('📋 Clipboard paste support enabled');
     }
     
     async saveTaskChanges(task, options = { closeAfterSave: true }) {
@@ -3655,10 +3871,12 @@ class ProjectBoard {
             }
             if (descriptionEditor.value !== undefined && descriptionEditor.value !== null) {
                 // Extract pure markdown content without YAML frontmatter
-                const pureMarkdown = this.extractMarkdownContent(descriptionEditor.value);
+                let pureMarkdown = this.extractMarkdownContent(descriptionEditor.value);
+                // Clean inline styles from images
+                pureMarkdown = this.cleanMarkdownFromInlineStyles(pureMarkdown);
                 task.content = pureMarkdown; // Short content for display
                 task.fullContent = pureMarkdown; // Pure markdown for file saving
-                console.log('📝 Extracted pure markdown, length:', pureMarkdown.length, 'original:', descriptionEditor.value.length);
+                console.log('📝 Extracted and cleaned markdown, length:', pureMarkdown.length, 'original:', descriptionEditor.value.length);
             }
         } else if (formElementsExist && !modalIsOpen) {
             console.log('📝 Modal is closed, preserving existing task content during drag-and-drop');
@@ -4477,10 +4695,35 @@ class ProjectBoard {
         }
     }
 
+    cleanMarkdownFromInlineStyles(markdown) {
+        if (!markdown) return markdown;
+
+        // Remove inline styles from HTML img tags
+        markdown = markdown.replace(/<img([^>]*?)style="[^"]*"([^>]*?)>/gi, '<img$1$2>');
+
+        // Convert HTML img tags to clean markdown
+        markdown = markdown.replace(/<img([^>]*)>/gi, (match) => {
+            const srcMatch = match.match(/src=["']([^"']+)["']/);
+            const altMatch = match.match(/alt=["']([^"']+)["']/);
+
+            if (srcMatch) {
+                const src = srcMatch[1];
+                const alt = altMatch ? altMatch[1] : '';
+                return `![${alt}](${src})`;
+            }
+            return match;
+        });
+
+        // Remove any standalone style attributes
+        markdown = markdown.replace(/\s+style="[^"]*"/gi, '');
+
+        return markdown.trim();
+    }
+
     extractMarkdownContent(content) {
         // Extract pure markdown content without YAML frontmatter
         if (!content) return '';
-        
+
         if (content.startsWith('---')) {
             const parts = content.split('---', 3);
             if (parts.length >= 3) {
@@ -4489,7 +4732,7 @@ class ProjectBoard {
                 return markdown.trim(); // Remove leading/trailing whitespace
             }
         }
-        
+
         // No YAML frontmatter found, return original content
         console.log('🔍 No YAML frontmatter found, using original content');
         return content;
@@ -4511,13 +4754,22 @@ class ProjectBoard {
             .replace(/^### (.+)$/gm, '<h4>$1</h4>')
             .replace(/^## (.+)$/gm, '<h3>$1</h3>')
             .replace(/^# (.+)$/gm, '<h2>$1</h2>')
-            // Images - must be processed before links
-            .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width: 100%; height: auto; margin: 8px 0; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">')
+            // Images - make them resizable with wrapper
+            .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (match, alt, src) => {
+                // Get saved width from image scales (if exists)
+                const savedScale = this.getImageScale(src);
+                const widthAttr = savedScale ? `data-width="${savedScale}"` : '';
+
+                return `<div class="resizable-image-wrapper">
+                    <img src="${src}" alt="${alt}" class="resizable-image" data-src="${src}" ${widthAttr}>
+                    <div class="resize-handle"></div>
+                </div>`;
+            })
             // Links
             .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" style="color: #8b5cf6; text-decoration: none;">$1</a>')
             // Bold
             .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-            // Italic  
+            // Italic
             .replace(/\*(.+?)\*/g, '<em>$1</em>')
             // Code
             .replace(/`([^`]+)`/g, '<code style="background: #f3f4f6; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 0.9em;">$1</code>')
@@ -4532,8 +4784,114 @@ class ProjectBoard {
             // Line breaks
             .replace(/\n\n/g, '<br><br>')
             .replace(/\n/g, '<br>');
-            
+
         return html;
+    }
+
+    /**
+     * Get saved image scale/width for an image URL
+     */
+    getImageScale(imageSrc) {
+        if (!this.currentTask) return null;
+
+        // Load from task metadata
+        const taskId = this.currentTask.id;
+        const storageKey = `image-scales-${this.currentProject?.id}-${taskId}`;
+        const savedScales = JSON.parse(localStorage.getItem(storageKey) || '{}');
+
+        return savedScales[imageSrc] || null;
+    }
+
+    /**
+     * Save image scale/width for an image URL
+     */
+    saveImageScale(imageSrc, width) {
+        if (!this.currentTask) return;
+
+        const taskId = this.currentTask.id;
+        const storageKey = `image-scales-${this.currentProject?.id}-${taskId}`;
+        const savedScales = JSON.parse(localStorage.getItem(storageKey) || '{}');
+
+        savedScales[imageSrc] = width;
+        localStorage.setItem(storageKey, JSON.stringify(savedScales));
+
+        console.log(`💾 Saved image scale: ${imageSrc} = ${width}px`);
+    }
+
+    /**
+     * Setup resize functionality for images in preview
+     */
+    setupImageResize(previewElement) {
+        if (!previewElement) return;
+
+        // Find all resizable images
+        const images = previewElement.querySelectorAll('.resizable-image');
+
+        images.forEach(img => {
+            const wrapper = img.closest('.resizable-image-wrapper');
+            if (!wrapper) return;
+
+            const handle = wrapper.querySelector('.resize-handle');
+
+            // Apply saved width from data-width attribute
+            const savedWidth = img.getAttribute('data-width');
+            if (savedWidth) {
+                img.style.width = savedWidth + 'px';
+            }
+
+            // Show handle on hover
+            wrapper.addEventListener('mouseenter', () => {
+                if (handle) handle.style.display = 'block';
+            });
+
+            wrapper.addEventListener('mouseleave', () => {
+                if (handle) handle.style.display = 'none';
+            });
+
+            // Make image resizable by dragging from corner
+            let isResizing = false;
+            let startX, startWidth;
+
+            const startResize = (e) => {
+                isResizing = true;
+                startX = e.clientX;
+                startWidth = img.offsetWidth;
+                e.preventDefault();
+                document.body.style.cursor = 'nwse-resize';
+            };
+
+            const doResize = (e) => {
+                if (!isResizing) return;
+
+                const deltaX = e.clientX - startX;
+                const newWidth = Math.max(100, Math.min(800, startWidth + deltaX));
+
+                img.style.width = newWidth + 'px';
+            };
+
+            const stopResize = (e) => {
+                if (!isResizing) return;
+
+                isResizing = false;
+                document.body.style.cursor = '';
+
+                // Save the new width
+                const finalWidth = img.offsetWidth;
+                const imageSrc = img.getAttribute('data-src');
+                this.saveImageScale(imageSrc, finalWidth);
+
+                console.log(`✅ Image resized to ${finalWidth}px`);
+            };
+
+            // Attach events to both image and handle
+            img.addEventListener('mousedown', startResize);
+            if (handle) {
+                handle.addEventListener('mousedown', startResize);
+            }
+
+            document.addEventListener('mousemove', doResize);
+            document.addEventListener('mouseup', stopResize);
+        });
     }
 
 
@@ -5983,6 +6341,57 @@ function generatePromptFromDescription() {
     // Close the description modal
     closeTaskDescriptionModal();
 
+    // Get current project information
+    const projectBoard = window.projectBoard;
+    const currentProject = projectBoard?.currentProject;
+
+    // Determine project details
+    const projectId = currentProject?.id || 'PROJECT';
+    const projectName = currentProject?.name || 'Unknown Project';
+
+    // Determine base path (check if running in web, docker-deploy, or fira)
+    const currentPath = window.location.pathname;
+    let projectsBasePath = 'projects'; // default
+
+    if (currentPath.includes('/web/')) {
+        projectsBasePath = 'web/projects';
+    } else if (currentPath.includes('/docker-deploy/')) {
+        projectsBasePath = 'docker-deploy/projects';
+    } else if (currentPath.includes('/fira/')) {
+        projectsBasePath = 'fira/code/projects';
+    }
+
+    // Calculate next task number
+    const tasks = projectBoard?.tasks || [];
+    let maxTaskNumber = 0;
+
+    // Extract task numbers from existing tasks
+    const projectPrefix = projectId.toUpperCase();
+    tasks.forEach(task => {
+        if (task.id) {
+            // Match pattern like "FIRA-10" or "TF-5"
+            const match = task.id.match(new RegExp(`^${projectPrefix}-(\\d+)$`, 'i'));
+            if (match) {
+                const taskNumber = parseInt(match[1], 10);
+                if (taskNumber > maxTaskNumber) {
+                    maxTaskNumber = taskNumber;
+                }
+            }
+        }
+    });
+
+    const nextTaskNumber = maxTaskNumber + 1;
+    const nextTaskId = `${projectPrefix}-${nextTaskNumber}`;
+
+    // Determine current user/developer
+    const currentUser = window.globalDataManager?.currentUser?.username || 'dev-user';
+
+    // Full project path
+    const projectPath = `${projectsBasePath}/${projectId}`;
+    const taskFolder = 'backlog';
+    const taskSavePath = `${projectPath}/${taskFolder}/${currentUser}`;
+    const taskFileName = `${nextTaskId}.md`;
+
     // Update the prompt with user's description
     const promptTextarea = document.getElementById('generatePromptTextarea');
     if (promptTextarea) {
@@ -5990,6 +6399,17 @@ function generatePromptFromDescription() {
 
 You are a task generator for the Fira project management system.
 Generate a task in Markdown format with YAML frontmatter based on my previous description.
+
+PROJECT INFORMATION:
+- Project Name: ${projectName}
+- Project ID: ${projectId}
+- Projects Base Path: ${projectsBasePath}
+- Project Path: ${projectPath}
+- Task Folder: ${taskFolder}
+- Developer: ${currentUser}
+- Task Save Path: ${taskSavePath}
+- Task File Name: ${taskFileName}
+- Task ID: ${nextTaskId}
 
 REQUIRED FORMAT:
 ---
@@ -6016,6 +6436,9 @@ created: [Today's date in YYYY-MM-DD format]
 
 GUIDELINES:
 - Title: Clear and actionable (e.g., "Implement user authentication")
+- The task ID must be: ${nextTaskId}
+- File must be saved as: ${taskFileName}
+- Save location: ${taskSavePath}/
 - Estimate: Realistic based on complexity
 - Priority: Based on urgency and impact
 - Status: Always "backlog" for new tasks
@@ -6129,6 +6552,35 @@ function copyGeneratePrompt() {
     }
 
     function showCopySuccessToast() {
+        // Ensure toast animation keyframes exist
+        if (!document.getElementById('toast-animation-styles')) {
+            const styleEl = document.createElement('style');
+            styleEl.id = 'toast-animation-styles';
+            styleEl.textContent = `
+                @keyframes toastFadeIn {
+                    from {
+                        opacity: 0;
+                        transform: translateX(-50%) translateY(10px);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateX(-50%) translateY(0);
+                    }
+                }
+                @keyframes toastFadeOut {
+                    from {
+                        opacity: 1;
+                        transform: translateX(-50%) translateY(0);
+                    }
+                    to {
+                        opacity: 0;
+                        transform: translateX(-50%) translateY(-10px);
+                    }
+                }
+            `;
+            document.head.appendChild(styleEl);
+        }
+
         // Create a temporary toast notification
         const toast = document.createElement('div');
         toast.textContent = 'Prompt copied to clipboard!';
@@ -6145,14 +6597,14 @@ function copyGeneratePrompt() {
             font-weight: 600;
             z-index: 20000;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            animation: slideUp 0.3s ease;
+            animation: toastFadeIn 0.3s ease forwards;
         `;
 
         document.body.appendChild(toast);
 
         // Remove toast after 2 seconds
         setTimeout(() => {
-            toast.style.animation = 'slideDown 0.3s ease';
+            toast.style.animation = 'toastFadeOut 0.3s ease forwards';
             setTimeout(() => {
                 document.body.removeChild(toast);
             }, 300);

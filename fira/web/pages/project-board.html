@@ -13,6 +13,8 @@
     <link rel="stylesheet" href="../dow-viewer.css?v=20251030">
     <link rel="stylesheet" href="../blocked-work.css?v=20251030">
     <link rel="stylesheet" href="../cfd-chart.css?v=20251030">
+    <link rel="stylesheet" href="../image-gallery.css?v=20251030">
+    <link rel="stylesheet" href="../attachments-list.css?v=20251030">
     <script src="../projects-data.js?v=20251030"></script>
     <script src="../file-system.js?v=20251030"></script>
     <script src="../api-client.js?v=20251030"></script>
@@ -21,6 +23,8 @@
     <script src="../blocked-work-manager.js?v=20251030"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="../cfd-chart.js?v=20251030"></script>
+    <script src="../image-gallery.js?v=20251030"></script>
+    <script src="../attachments-list.js?v=20251030"></script>
 </head>
 <body>
     <div class="project-board">
@@ -584,6 +588,7 @@
                         <button class="toolbar-btn" data-command="quote" title="Quote">❝ Quote</button>
                         <button class="toolbar-btn" data-command="link" title="Link">🔗</button>
                         <button class="toolbar-btn" data-command="image" title="Image">🖼️</button>
+                        <button class="toolbar-btn" data-command="attachment" title="Attach File">📎</button>
                     </div>
                     
                     <!-- Text Content Area -->
@@ -602,9 +607,15 @@
                     <!-- Image Upload Area -->
                     <div class="image-drop-zone">
                         <p>Drop an image here or <span class="upload-link">click to select</span></p>
-                        <input type="file" id="imageUpload" accept="image/*" style="display: none;">
+                        <input type="file" id="imageUpload" accept="image/*" multiple style="display: none;">
                     </div>
-                    
+
+                    <!-- Image Gallery Section -->
+                    <div id="imageGalleryContainer"></div>
+
+                    <!-- Attachments Section -->
+                    <div id="attachmentsContainer"></div>
+
                     <!-- Activities Section -->
                     <div class="activities-section">
                         <div class="activities-header">
@@ -889,6 +900,7 @@
                         <button class="toolbar-btn" data-command="quote" title="Quote">❝ Quote</button>
                         <button class="toolbar-btn" data-command="link" title="Link">🔗</button>
                         <button class="toolbar-btn" data-command="image" title="Image">🖼️</button>
+                        <button class="toolbar-btn" data-command="attachment" title="Attach File">📎</button>
                     </div>
                     
                     <!-- Text Content Area -->
@@ -906,9 +918,15 @@
                     <!-- Image Upload Area -->
                     <div class="image-drop-zone">
                         <p>Drop an image here or <span class="upload-link">click to select</span></p>
-                        <input type="file" id="createImageUpload" accept="image/*" style="display: none;">
+                        <input type="file" id="createImageUpload" accept="image/*" multiple style="display: none;">
                     </div>
-                    
+
+                    <!-- Image Gallery Section -->
+                    <div id="createImageGalleryContainer"></div>
+
+                    <!-- Attachments Section -->
+                    <div id="createAttachmentsContainer"></div>
+
                     <!-- Activities Section -->
                     <div class="activities-section">
                         <div class="activities-header">
