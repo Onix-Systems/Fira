@@ -26,18 +26,97 @@ jobs:
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
 
-      - name: Add GitLab remote
+      - name: Verify secrets are configured
         run: |
-          git remote add gitlab https://oauth2:${{ secrets.GITLAB_TOKEN }}@gitlab.com/${{ secrets.GITLAB_REPO }}.git || true
-          git remote -v
+          if [ -z "${{ secrets.GITLAB_TOKEN }}" ]; then
+            echo "ERROR: GITLAB_TOKEN secret is not configured!"
+            echo "Please add GITLAB_TOKEN secret in GitHub repository settings."
+            exit 1
+          fi
+          if [ -z "${{ secrets.GITLAB_REPO }}" ]; then
+            echo "ERROR: GITLAB_REPO secret is not configured!"
+            echo "Please add GITLAB_REPO secret in GitHub repository settings."
+            exit 1
+          fi
+          echo "✅ Secrets are configured"
+          echo "GitLab repository: ${{ secrets.GITLAB_REPO }}"
 
-      - name: Push to GitLab
+          # Check token format
+          TOKEN_PREFIX=$(echo "${{ secrets.GITLAB_TOKEN }}" | cut -c1-6)
+          echo "Token prefix: ${TOKEN_PREFIX}"
+          if [[ "$TOKEN_PREFIX" == "glpat-" ]]; then
+            echo "✅ Token format looks correct (Personal Access Token)"
+          elif [[ "$TOKEN_PREFIX" == "gldt-" ]]; then
+            echo "✅ Token format looks correct (Deploy Token)"
+          else
+            echo "⚠️ Warning: Token doesn't start with glpat- or gldt-. This might be an old token format."
+          fi
+
+      - name: Test GitLab API access
         run: |
+          echo "Testing GitLab API access..."
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            --header "PRIVATE-TOKEN: ${{ secrets.GITLAB_TOKEN }}" \
+            "https://gitlab.com/api/v4/projects/${{ secrets.GITLAB_REPO }}" | sed 's/%2F/\//g')
+
+          echo "API Response Code: $RESPONSE"
+
+          if [ "$RESPONSE" = "200" ]; then
+            echo "✅ Successfully accessed GitLab repository via API"
+          elif [ "$RESPONSE" = "401" ]; then
+            echo "❌ ERROR: Token authentication failed (401 Unauthorized)"
+            echo "Possible issues:"
+            echo "  - Token is invalid or expired"
+            echo "  - Token doesn't have 'api' or 'read_api' scope"
+            exit 1
+          elif [ "$RESPONSE" = "404" ]; then
+            echo "❌ ERROR: Repository not found (404)"
+            echo "Repository path: ${{ secrets.GITLAB_REPO }}"
+            echo "Please check:"
+            echo "  - Repository exists on GitLab"
+            echo "  - Repository path format is: 'username/repo-name' (not URL)"
+            echo "  - Token has access to this repository"
+            exit 1
+          else
+            echo "⚠️ Unexpected response code: $RESPONSE"
+            echo "Continuing anyway..."
+          fi
+
+      - name: Add GitLab remote and push
+        run: |
+          # Use token directly in URL for better compatibility
+          GITLAB_URL="https://oauth2:${{ secrets.GITLAB_TOKEN }}@gitlab.com/${{ secrets.GITLAB_REPO }}.git"
+
+          # Add GitLab remote
+          git remote add gitlab "$GITLAB_URL" 2>/dev/null || git remote set-url gitlab "$GITLAB_URL"
+
+          echo "Remote configured:"
+          git remote -v | grep gitlab | sed 's/oauth2:.*@/oauth2:***@/g'
+
+          # Test connection with a simple fetch
+          echo "Testing connection to GitLab..."
+          if git ls-remote gitlab HEAD > /dev/null 2>&1; then
+            echo "✅ Successfully connected to GitLab repository"
+          else
+            echo "❌ Failed to connect to GitLab repository"
+            echo "This usually means:"
+            echo "  - Token doesn't have 'write_repository' scope"
+            echo "  - Repository doesn't exist"
+            echo "  - Token doesn't have access to the repository"
+            exit 1
+          fi
+
           # Push all branches
+          echo "Pushing all branches to GitLab..."
           git push gitlab --all --force
+          echo "✅ Branches pushed successfully"
 
           # Push all tags
-          git push gitlab --tags --force
+          echo "Pushing all tags to GitLab..."
+          git push gitlab --tags --force || echo "No tags to push"
+          echo "✅ Tags pushed successfully"
+
+          echo "✅ Successfully synced to GitLab"
         env:
           GIT_TERMINAL_PROMPT: 0
 
@@ -56,12 +135,16 @@ jobs:
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
 
-      - name: Add GitLab remote
+      - name: Add GitLab remote and delete branch
         run: |
-          git remote add gitlab https://oauth2:${{ secrets.GITLAB_TOKEN }}@gitlab.com/${{ secrets.GITLAB_REPO }}.git || true
+          # Configure Git credentials
+          git config --global credential.helper store
+          echo "https://oauth2:${{ secrets.GITLAB_TOKEN }}@gitlab.com" > ~/.git-credentials
 
-      - name: Delete branch on GitLab
-        run: |
+          # Add GitLab remote
+          git remote add gitlab https://gitlab.com/${{ secrets.GITLAB_REPO }}.git || git remote set-url gitlab https://gitlab.com/${{ secrets.GITLAB_REPO }}.git
+
+          # Delete branch on GitLab
           git push gitlab --delete ${{ github.event.ref }} || echo "Branch already deleted or doesn't exist on GitLab"
         env:
           GIT_TERMINAL_PROMPT: 0
