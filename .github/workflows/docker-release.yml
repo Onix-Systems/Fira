@@ -7,7 +7,10 @@ on:
   workflow_dispatch:  # Allows manual trigger from GitHub UI
 
 env:
-  DOCKER_IMAGE: ${{ secrets.DOCKER_USERNAME }}/fira-web
+  # Use secrets if available, otherwise use repository owner for GitHub Container Registry
+  DOCKER_REGISTRY: ${{ secrets.DOCKER_USERNAME && 'docker.io' || 'ghcr.io' }}
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME || github.repository_owner }}
+  DOCKER_IMAGE: ${{ secrets.DOCKER_USERNAME && format('{0}/fira-web', secrets.DOCKER_USERNAME) || format('ghcr.io/{0}/fira-web', github.repository_owner) }}
 
 jobs:
   build-and-push:
@@ -20,11 +23,12 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Docker Hub
+      - name: Log in to Container Registry
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ env.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD || secrets.GITHUB_TOKEN }}
 
       - name: Extract version from tag
         id: version
@@ -96,6 +100,7 @@ jobs:
             }
 
       - name: Docker Hub Description Update
+        if: secrets.DOCKER_USERNAME != '' && secrets.DOCKER_PASSWORD != ''
         uses: peter-evans/dockerhub-description@v4
         with:
           username: ${{ secrets.DOCKER_USERNAME }}

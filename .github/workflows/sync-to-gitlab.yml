@@ -1,0 +1,67 @@
+name: Sync to GitLab
+
+on:
+  push:
+    branches:
+      - master
+      - main
+      - '*'  # Sync all branches
+  delete:
+    branches:
+      - '*'  # Sync branch deletions
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for all branches and tags
+
+      - name: Setup Git config
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+      - name: Add GitLab remote
+        run: |
+          git remote add gitlab https://oauth2:${{ secrets.GITLAB_TOKEN }}@gitlab.com/${{ secrets.GITLAB_REPO }}.git || true
+          git remote -v
+
+      - name: Push to GitLab
+        run: |
+          # Push all branches
+          git push gitlab --all --force
+
+          # Push all tags
+          git push gitlab --tags --force
+        env:
+          GIT_TERMINAL_PROMPT: 0
+
+  sync-on-delete:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'delete'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Git config
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+      - name: Add GitLab remote
+        run: |
+          git remote add gitlab https://oauth2:${{ secrets.GITLAB_TOKEN }}@gitlab.com/${{ secrets.GITLAB_REPO }}.git || true
+
+      - name: Delete branch on GitLab
+        run: |
+          git push gitlab --delete ${{ github.event.ref }} || echo "Branch already deleted or doesn't exist on GitLab"
+        env:
+          GIT_TERMINAL_PROMPT: 0

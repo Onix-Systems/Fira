@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy web application files
-COPY web/ .
+COPY . .
 
 # Debug: List files to verify web app structure
 RUN echo "=== Verifying file structure ===" && \
@@ -34,7 +34,7 @@ FROM nginx:stable-alpine AS deploy
 RUN apk add --no-cache python3 py3-pip supervisor curl
 
 # Copy nginx configuration
-COPY web/nginx/nginx.conf /etc/nginx/nginx.conf
+COPY nginx/nginx.conf /etc/nginx/nginx.conf
 
 # Copy web application
 COPY --from=base /app /app
