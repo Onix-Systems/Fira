@@ -526,14 +526,15 @@ class ProjectManager:
             return []
 
         # Check all status folders for developer directories
-        status_folders = ['progress', 'inprogress', 'review', 'testing', 'done']
-        
+        status_folders = ['backlog', 'progress', 'inprogress', 'review', 'testing', 'done']
+
         for folder_name in status_folders:
             folder_path = project_path / folder_name
             if folder_path.exists():
                 # List all subdirectories in status folder
                 for item in folder_path.iterdir():
-                    if item.is_dir() and (item.name.startswith('dev-') or item.name.startswith('tech-')):
+                    # Accept any directory that doesn't start with . (system folders)
+                    if item.is_dir() and not item.name.startswith('.'):
                         developers.add(item.name)
                         print(f"Found developer folder: {item.name} in {folder_name}")
 

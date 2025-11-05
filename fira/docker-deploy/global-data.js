@@ -192,7 +192,7 @@ class GlobalDataManager {
                                         console.log('🔄 Restoring previous directory selection...');
                                         const projects = await this.scanDirectoryForProjects(window.firaDirectoryHandle);
                                         if (projects.length > 0) {
-                                            this.projects = this.filterDeletedProjects(projects);
+                                            this.projects = projects;
                                             this.loadingMode = 'directory-picker';
                                             await this.loadTasksForProjects(window.firaDirectoryHandle);
                                             console.log(`✅ Restored directory mode, loaded ${this.projects.length} projects and ${this.allTasks.length} tasks`);
@@ -354,7 +354,7 @@ class GlobalDataManager {
             const success = await window.autoProjectsScanner.scanProjects();
             if (success) {
                 // Load projects from auto scanner
-                this.projects = this.filterDeletedProjects(window.autoProjectsScanner.getProjects());
+                this.projects = window.autoProjectsScanner.getProjects();
                 this.loadingMode = 'auto-scanner';
                 
                 // Create empty task structure for now
@@ -386,7 +386,7 @@ class GlobalDataManager {
             const success = await window.realFileSystemLoader.initialize();
             if (success) {
                 // Load projects from real file system loader
-                this.projects = this.filterDeletedProjects(window.realFileSystemLoader.getProjects());
+                this.projects = window.realFileSystemLoader.getProjects();
                 this.loadingMode = 'real-filesystem';
                 
                 // Create empty task structure for now
@@ -418,7 +418,7 @@ class GlobalDataManager {
             const success = await window.jQueryFileLoader.initialize();
             if (success) {
                 // Load projects from jQuery file loader
-                this.projects = this.filterDeletedProjects(window.jQueryFileLoader.getProjects());
+                this.projects = window.jQueryFileLoader.getProjects();
                 this.loadingMode = 'jquery-filesystem';
                 
                 // Create empty task structure
@@ -500,7 +500,7 @@ class GlobalDataManager {
                 // Reload projects from the stored directory handle
                 const projects = await this.scanDirectoryForProjects(this.directoryHandle);
                 if (projects.length > 0) {
-                    this.projects = this.filterDeletedProjects(projects);
+                    this.projects = projects;
                     this.loadingMode = 'directory-picker';
                     
                     // Load all tasks for all projects
@@ -535,9 +535,9 @@ class GlobalDataManager {
                     // Scan the directory again
                     const projects = await this.scanDirectoryForProjects(this.directoryHandle);
                     await this.loadTasksForProjects(this.directoryHandle);
-                    
+
                     if (projects.length > 0) {
-                        this.projects = this.filterDeletedProjects(projects);
+                        this.projects = projects;
                         this.loadingMode = 'directory-restored';
                         return true;
                     }
@@ -585,9 +585,9 @@ class GlobalDataManager {
                 
                 // Rescan the directory
                 const projects = await this.scanDirectoryForProjects(this.directoryHandle);
-                
+
                 if (projects.length >= 0) { // Allow zero projects
-                    this.projects = this.filterDeletedProjects(projects);
+                    this.projects = projects;
                     await this.loadTasksForProjects(this.directoryHandle);
                     this.loadingMode = 'directory-refreshed';
                     
@@ -1492,7 +1492,7 @@ class GlobalDataManager {
     loadFromStaticData() {
         // Load static data as fallback
         console.log('📊 Loading static fallback data (server unavailable mode)');
-        this.projects = window.PROJECTS_DATA ? this.filterDeletedProjects([...window.PROJECTS_DATA]) : [];
+        this.projects = window.PROJECTS_DATA ? [...window.PROJECTS_DATA] : [];
         this.loadingMode = 'static';
         
         // Show user-friendly message about fallback mode
@@ -1587,9 +1587,9 @@ class GlobalDataManager {
 
         try {
             console.log(`🔄 SERVER RELOAD: Loading fresh data from server`);
-            
-            // Load projects from server
-            this.projects = this.filterDeletedProjects(await this.apiClient.getProjects());
+
+            // Load projects from server (no filtering - server is source of truth)
+            this.projects = await this.apiClient.getProjects();
             this.loadingMode = 'server';
             
             // Complete projects loading step
@@ -1828,7 +1828,7 @@ class GlobalDataManager {
 
     removeProjectFromCache(projectId) {
         console.log('🗑️ Removing project from local cache:', projectId);
-        
+
         // Update local cache safely
         if (this.projectData && Array.isArray(this.projectData)) {
             this.projectData = this.projectData.filter(p => p.id !== projectId);
@@ -1839,10 +1839,10 @@ class GlobalDataManager {
         if (this.allTasks && Array.isArray(this.allTasks)) {
             this.allTasks = this.allTasks.filter(task => task.projectId !== projectId);
         }
-        
-        // Save to localStorage to persist across page refreshes
-        this.saveDeletedProjectToStorage(projectId);
-        
+
+        // NOTE: No longer saving to localStorage - backend physically deletes the folder
+        // The project will be gone on next page refresh when data is fetched from server
+
         console.log('🗑️ Project removed from local cache');
     }
 
@@ -2839,7 +2839,7 @@ class GlobalDataManager {
                     console.warn('Invalid cache file structure');
                 } else {
                     // Load data from cache file
-                    this.projects = this.filterDeletedProjects(cacheData.projects);
+                    this.projects = cacheData.projects;
                     this.allTasks = cacheData.allTasks;
                     this.projectTasks = cacheData.projectTasks;
                     this.cacheTimestamp = new Date(cacheData.timestamp);
@@ -2866,9 +2866,9 @@ class GlobalDataManager {
                     console.warn('Invalid localStorage cache structure');
                     return false;
                 }
-                
+
                 // Load data from localStorage cache
-                this.projects = this.filterDeletedProjects(cacheData.projects);
+                this.projects = cacheData.projects;
                 this.allTasks = cacheData.allTasks;
                 this.projectTasks = cacheData.projectTasks;
                 this.cacheTimestamp = new Date(cacheData.timestamp);

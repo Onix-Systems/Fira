@@ -22,6 +22,9 @@ class ImageGallery {
         this.startX = 0;
         this.startY = 0;
 
+        // Video formats
+        this.videoFormats = ['.mp4', '.mov', '.avi', '.webm', '.mkv', '.flv'];
+
         if (this.container) {
             this.initGallery();
         }
@@ -53,13 +56,17 @@ class ImageGallery {
                 </button>
 
                 <div class="lightbox-content">
-                    <img id="lightboxImage" src="" alt="">
+                    <img id="lightboxImage" src="" alt="" style="display: none;">
+                    <video id="lightboxVideo" controls style="display: none; max-width: 90%; max-height: 90vh;">
+                        <source id="lightboxVideoSource" src="" type="">
+                        Your browser does not support the video tag.
+                    </video>
                     <div class="lightbox-counter">
                         <span id="lightboxCounter">1 / 1</span>
                     </div>
 
-                    <!-- Zoom Controls -->
-                    <div class="lightbox-zoom-controls">
+                    <!-- Zoom Controls (only for images) -->
+                    <div class="lightbox-zoom-controls" id="lightboxZoomControls">
                         <button class="zoom-btn" onclick="window.imageGallery.zoomOut()" title="Zoom Out (-)">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
                                 <path d="M19 13H5v-2h14v2z"/>
@@ -90,9 +97,36 @@ class ImageGallery {
         this.previewContainer = this.container.querySelector('.image-preview-container');
         this.lightbox = document.getElementById('imageLightbox');
         this.lightboxImage = document.getElementById('lightboxImage');
+        this.lightboxVideo = document.getElementById('lightboxVideo');
+        this.lightboxVideoSource = document.getElementById('lightboxVideoSource');
         this.lightboxCounter = document.getElementById('lightboxCounter');
+        this.lightboxZoomControls = document.getElementById('lightboxZoomControls');
 
         this.setupKeyboardNavigation();
+    }
+
+    /**
+     * Check if file is a video
+     */
+    isVideo(filename) {
+        const ext = '.' + filename.split('.').pop().toLowerCase();
+        return this.videoFormats.includes(ext);
+    }
+
+    /**
+     * Get video MIME type
+     */
+    getVideoMimeType(filename) {
+        const ext = '.' + filename.split('.').pop().toLowerCase();
+        const mimeTypes = {
+            '.mp4': 'video/mp4',
+            '.webm': 'video/webm',
+            '.mov': 'video/quicktime',
+            '.avi': 'video/x-msvideo',
+            '.mkv': 'video/x-matroska',
+            '.flv': 'video/x-flv'
+        };
+        return mimeTypes[ext] || 'video/mp4';
     }
 
     /**
@@ -152,63 +186,124 @@ class ImageGallery {
      */
     renderSingleImage() {
         const image = this.images[0];
+        const isVideo = this.isVideo(image.original_name || image.filename || '');
 
-        this.previewContainer.innerHTML = `
-            <div class="image-single">
-                <div class="image-wrapper">
-                    <img src="${image.thumbnail_url || image.url}"
-                         alt="${image.description || image.original_name || ''}"
-                         onclick="window.imageGallery.openLightbox(0)"
-                         class="image-thumbnail">
-                    <button class="image-delete"
-                            onclick="window.imageGallery.deleteImage(0, event)"
-                            title="Delete image">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                            <path d="M18 6L6 18M6 6L18 18" stroke="white" stroke-width="2"/>
-                        </svg>
-                    </button>
-                    <button class="image-zoom"
-                            onclick="window.imageGallery.openLightbox(0)"
-                            title="View full size">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                            <path d="M21 21L15 15M17 10C17 13.866 13.866 17 10 17C6.13401 17 3 13.866 3 10C3 6.13401 6.13401 3 10 3C13.866 3 17 6.13401 17 10Z" stroke="white" stroke-width="2"/>
-                        </svg>
-                    </button>
+        if (isVideo) {
+            // Render video preview
+            this.previewContainer.innerHTML = `
+                <div class="image-single">
+                    <div class="image-wrapper video-wrapper">
+                        <video src="${image.url}"
+                               class="video-thumbnail"
+                               onclick="window.imageGallery.openLightbox(0)">
+                            Your browser does not support the video tag.
+                        </video>
+                        <div class="video-play-overlay" onclick="window.imageGallery.openLightbox(0)">
+                            <svg width="64" height="64" viewBox="0 0 24 24" fill="white">
+                                <path d="M8 5v14l11-7z"/>
+                            </svg>
+                        </div>
+                        <button class="image-delete"
+                                onclick="window.imageGallery.deleteImage(0, event)"
+                                title="Delete video">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                <path d="M18 6L6 18M6 6L18 18" stroke="white" stroke-width="2"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <p class="image-name">🎬 ${image.original_name || image.filename || ''}</p>
                 </div>
-                <p class="image-name">${image.original_name || image.filename || ''}</p>
-            </div>
-        `;
+            `;
+        } else {
+            // Render image preview
+            this.previewContainer.innerHTML = `
+                <div class="image-single">
+                    <div class="image-wrapper">
+                        <img src="${image.thumbnail_url || image.url}"
+                             alt="${image.description || image.original_name || ''}"
+                             onclick="window.imageGallery.openLightbox(0)"
+                             class="image-thumbnail">
+                        <button class="image-delete"
+                                onclick="window.imageGallery.deleteImage(0, event)"
+                                title="Delete image">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                <path d="M18 6L6 18M6 6L18 18" stroke="white" stroke-width="2"/>
+                            </svg>
+                        </button>
+                        <button class="image-zoom"
+                                onclick="window.imageGallery.openLightbox(0)"
+                                title="View full size">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                <path d="M21 21L15 15M17 10C17 13.866 13.866 17 10 17C6.13401 17 3 13.866 3 10C3 6.13401 6.13401 3 10 3C13.866 3 17 6.13401 17 10Z" stroke="white" stroke-width="2"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <p class="image-name">${image.original_name || image.filename || ''}</p>
+                </div>
+            `;
+        }
     }
 
     /**
      * Render carousel for multiple images
      */
     renderCarousel() {
-        const imagesHTML = this.images.map((image, index) => `
-            <div class="carousel-item ${index === 0 ? 'active' : ''}">
-                <div class="image-wrapper">
-                    <img src="${image.thumbnail_url || image.url}"
-                         alt="${image.description || image.original_name || ''}"
-                         onclick="window.imageGallery.openLightbox(${index})"
-                         class="image-thumbnail">
-                    <button class="image-delete"
-                            onclick="window.imageGallery.deleteImage(${index}, event)"
-                            title="Delete image">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                            <path d="M18 6L6 18M6 6L18 18" stroke="white" stroke-width="2"/>
-                        </svg>
-                    </button>
-                    <button class="image-zoom"
-                            onclick="window.imageGallery.openLightbox(${index})"
-                            title="View full size">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                            <path d="M21 21L15 15M17 10C17 13.866 13.866 17 10 17C6.13401 17 3 13.866 3 10C3 6.13401 6.13401 3 10 3C13.866 3 17 6.13401 17 10Z" stroke="white" stroke-width="2"/>
-                        </svg>
-                    </button>
-                </div>
-                <p class="image-name">${image.original_name || image.filename || ''}</p>
-            </div>
-        `).join('');
+        const imagesHTML = this.images.map((image, index) => {
+            const isVideo = this.isVideo(image.original_name || image.filename || '');
+
+            if (isVideo) {
+                return `
+                    <div class="carousel-item ${index === 0 ? 'active' : ''}">
+                        <div class="image-wrapper video-wrapper">
+                            <video src="${image.url}"
+                                   class="video-thumbnail"
+                                   onclick="window.imageGallery.openLightbox(${index})">
+                                Your browser does not support the video tag.
+                            </video>
+                            <div class="video-play-overlay" onclick="window.imageGallery.openLightbox(${index})">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="white">
+                                    <path d="M8 5v14l11-7z"/>
+                                </svg>
+                            </div>
+                            <button class="image-delete"
+                                    onclick="window.imageGallery.deleteImage(${index}, event)"
+                                    title="Delete video">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                    <path d="M18 6L6 18M6 6L18 18" stroke="white" stroke-width="2"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <p class="image-name">🎬 ${image.original_name || image.filename || ''}</p>
+                    </div>
+                `;
+            } else {
+                return `
+                    <div class="carousel-item ${index === 0 ? 'active' : ''}">
+                        <div class="image-wrapper">
+                            <img src="${image.thumbnail_url || image.url}"
+                                 alt="${image.description || image.original_name || ''}"
+                                 onclick="window.imageGallery.openLightbox(${index})"
+                                 class="image-thumbnail">
+                            <button class="image-delete"
+                                    onclick="window.imageGallery.deleteImage(${index}, event)"
+                                    title="Delete image">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                    <path d="M18 6L6 18M6 6L18 18" stroke="white" stroke-width="2"/>
+                                </svg>
+                            </button>
+                            <button class="image-zoom"
+                                    onclick="window.imageGallery.openLightbox(${index})"
+                                    title="View full size">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                    <path d="M21 21L15 15M17 10C17 13.866 13.866 17 10 17C6.13401 17 3 13.866 3 10C3 6.13401 6.13401 3 10 3C13.866 3 17 6.13401 17 10Z" stroke="white" stroke-width="2"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <p class="image-name">${image.original_name || image.filename || ''}</p>
+                    </div>
+                `;
+            }
+        }).join('');
 
         this.previewContainer.innerHTML = `
             <div class="image-carousel">
@@ -312,10 +407,19 @@ class ImageGallery {
      */
     async deleteImage(index, event) {
         event?.stopPropagation();
+        event?.preventDefault();
+
+        // Prevent double deletion
+        if (this.deleteInProgress) {
+            console.warn('⚠️ Delete already in progress');
+            return;
+        }
 
         if (!confirm('Are you sure you want to delete this image?')) {
             return;
         }
+
+        this.deleteInProgress = true;
 
         const image = this.images[index];
 
@@ -346,6 +450,8 @@ class ImageGallery {
         } catch (error) {
             console.error('❌ Delete error:', error);
             alert('Failed to delete image: ' + error.message);
+        } finally {
+            this.deleteInProgress = false;
         }
     }
 
@@ -357,13 +463,42 @@ class ImageGallery {
 
         this.currentIndex = index;
         this.lightboxOpen = true;
+        const currentMedia = this.images[index];
+        const isVideo = this.isVideo(currentMedia.original_name || currentMedia.filename || '');
 
         // Reset zoom when opening
         this.resetZoom();
 
-        this.lightboxImage.src = this.images[index].url;
-        this.lightboxCounter.textContent = `${index + 1} / ${this.images.length}`;
+        if (isVideo) {
+            // Show video, hide image
+            this.lightboxImage.style.display = 'none';
+            this.lightboxVideo.style.display = 'block';
+            this.lightboxZoomControls.style.display = 'none';
 
+            // Set video source
+            this.lightboxVideoSource.src = currentMedia.url;
+            this.lightboxVideoSource.type = this.getVideoMimeType(currentMedia.original_name || currentMedia.filename);
+            this.lightboxVideo.load();
+
+            // Auto-play video when opened
+            setTimeout(() => {
+                this.lightboxVideo.play().catch(err => {
+                    console.log('Auto-play prevented:', err);
+                });
+            }, 100);
+        } else {
+            // Show image, hide video
+            this.lightboxImage.style.display = 'block';
+            this.lightboxVideo.style.display = 'none';
+            this.lightboxZoomControls.style.display = 'flex';
+
+            // Pause video if it was playing
+            this.lightboxVideo.pause();
+
+            this.lightboxImage.src = currentMedia.url;
+        }
+
+        this.lightboxCounter.textContent = `${index + 1} / ${this.images.length}`;
         this.lightbox.classList.add('active');
         document.body.style.overflow = 'hidden';
     }
@@ -373,6 +508,12 @@ class ImageGallery {
      */
     closeLightbox() {
         this.lightboxOpen = false;
+
+        // Pause video when closing
+        if (this.lightboxVideo) {
+            this.lightboxVideo.pause();
+        }
+
         this.lightbox.classList.remove('active');
         document.body.style.overflow = '';
     }
@@ -383,12 +524,41 @@ class ImageGallery {
     nextImage() {
         if (this.images.length === 0) return;
 
+        // Pause current video if playing
+        if (this.lightboxVideo) {
+            this.lightboxVideo.pause();
+        }
+
         this.currentIndex = (this.currentIndex + 1) % this.images.length;
 
         // Reset zoom when changing images
         this.resetZoom();
 
-        this.lightboxImage.src = this.images[this.currentIndex].url;
+        const currentMedia = this.images[this.currentIndex];
+        const isVideo = this.isVideo(currentMedia.original_name || currentMedia.filename || '');
+
+        if (isVideo) {
+            this.lightboxImage.style.display = 'none';
+            this.lightboxVideo.style.display = 'block';
+            this.lightboxZoomControls.style.display = 'none';
+
+            this.lightboxVideoSource.src = currentMedia.url;
+            this.lightboxVideoSource.type = this.getVideoMimeType(currentMedia.original_name || currentMedia.filename);
+            this.lightboxVideo.load();
+
+            setTimeout(() => {
+                this.lightboxVideo.play().catch(err => {
+                    console.log('Auto-play prevented:', err);
+                });
+            }, 100);
+        } else {
+            this.lightboxImage.style.display = 'block';
+            this.lightboxVideo.style.display = 'none';
+            this.lightboxZoomControls.style.display = 'flex';
+
+            this.lightboxImage.src = currentMedia.url;
+        }
+
         this.lightboxCounter.textContent = `${this.currentIndex + 1} / ${this.images.length}`;
     }
 
@@ -398,6 +568,11 @@ class ImageGallery {
     prevImage() {
         if (this.images.length === 0) return;
 
+        // Pause current video if playing
+        if (this.lightboxVideo) {
+            this.lightboxVideo.pause();
+        }
+
         this.currentIndex = this.currentIndex === 0
             ? this.images.length - 1
             : this.currentIndex - 1;
@@ -405,7 +580,31 @@ class ImageGallery {
         // Reset zoom when changing images
         this.resetZoom();
 
-        this.lightboxImage.src = this.images[this.currentIndex].url;
+        const currentMedia = this.images[this.currentIndex];
+        const isVideo = this.isVideo(currentMedia.original_name || currentMedia.filename || '');
+
+        if (isVideo) {
+            this.lightboxImage.style.display = 'none';
+            this.lightboxVideo.style.display = 'block';
+            this.lightboxZoomControls.style.display = 'none';
+
+            this.lightboxVideoSource.src = currentMedia.url;
+            this.lightboxVideoSource.type = this.getVideoMimeType(currentMedia.original_name || currentMedia.filename);
+            this.lightboxVideo.load();
+
+            setTimeout(() => {
+                this.lightboxVideo.play().catch(err => {
+                    console.log('Auto-play prevented:', err);
+                });
+            }, 100);
+        } else {
+            this.lightboxImage.style.display = 'block';
+            this.lightboxVideo.style.display = 'none';
+            this.lightboxZoomControls.style.display = 'flex';
+
+            this.lightboxImage.src = currentMedia.url;
+        }
+
         this.lightboxCounter.textContent = `${this.currentIndex + 1} / ${this.images.length}`;
     }
 

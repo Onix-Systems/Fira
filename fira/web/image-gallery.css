@@ -114,6 +114,46 @@
 }
 
 /* ========================================
+   Video Wrapper
+   ======================================== */
+
+.video-wrapper {
+    position: relative;
+}
+
+.video-thumbnail {
+    width: 100%;
+    height: auto;
+    display: block;
+    max-height: 300px;
+    object-fit: cover;
+    background: #000;
+}
+
+.video-play-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 80px;
+    height: 80px;
+    background: rgba(139, 92, 246, 0.9);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.video-wrapper:hover .video-play-overlay {
+    background: rgba(139, 92, 246, 1);
+    transform: translate(-50%, -50%) scale(1.1);
+}
+
+/* ========================================
    Carousel for Multiple Images
    ======================================== */
 
@@ -241,6 +281,26 @@
     user-select: none;
     transition: transform 0.2s ease;
     transform-origin: center center;
+}
+
+.lightbox-content video {
+    max-width: 90vw;
+    max-height: 90vh;
+    display: block;
+    margin: 0 auto;
+    border-radius: 8px;
+    background: #000;
+}
+
+/* Video controls styling */
+.lightbox-content video::-webkit-media-controls-panel {
+    background: rgba(0, 0, 0, 0.8);
+}
+
+.lightbox-content video::-webkit-media-controls-play-button,
+.lightbox-content video::-webkit-media-controls-volume-slider,
+.lightbox-content video::-webkit-media-controls-timeline {
+    filter: brightness(1.2);
 }
 
 .lightbox-close {

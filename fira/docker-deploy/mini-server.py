@@ -165,6 +165,223 @@ def delete_user_by_id(user_id):
 class ProjectManager:
     def __init__(self, base_dir):
         self.base_dir = Path(base_dir)
+        self.wip_config = self.load_wip_config()
+
+    def load_wip_config(self):
+        """Load WIP limits configuration"""
+        config_file = Path(os.getcwd()) / 'wip-config.json'
+        try:
+            if config_file.exists():
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            return {
+                'wip_limits': {'backlog': None, 'progress': 5, 'review': 3, 'testing': 4, 'done': None},
+                'cycle_time_sle': {'target_days': 8, 'probability': 85}
+            }
+        except Exception as e:
+            print(f"Error loading WIP config: {e}")
+            return {'wip_limits': {}, 'cycle_time_sle': {'target_days': 8, 'probability': 85}}
+
+    def calculate_cycle_time(self, started_at, done_at):
+        """Calculate cycle time in days between started and done timestamps"""
+        if not started_at or not done_at:
+            return None
+        try:
+            from datetime import datetime
+            start = datetime.fromisoformat(started_at.replace('Z', '+00:00'))
+            end = datetime.fromisoformat(done_at.replace('Z', '+00:00'))
+            delta = end - start
+            return round(delta.total_seconds() / 86400, 2)  # Convert to days
+        except Exception as e:
+            print(f"Error calculating cycle time: {e}")
+            return None
+
+    def calculate_age(self, created_at):
+        """Calculate age in days from creation to now"""
+        if not created_at:
+            return None
+        try:
+            from datetime import datetime
+            created = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+            now = datetime.now(created.tzinfo) if created.tzinfo else datetime.now()
+            delta = now - created
+            return round(delta.total_seconds() / 86400, 2)  # Convert to days
+        except Exception as e:
+            print(f"Error calculating age: {e}")
+            return None
+
+    def check_wip_limit(self, project_id, status, developer=None):
+        """
+        Check if adding a task to the given status would exceed WIP limit
+        Returns: (allowed: bool, current_count: int, limit: int, warning: bool)
+        """
+        wip_limits = self.wip_config.get('wip_limits', {})
+        wip_warnings = self.wip_config.get('wip_warnings', {})
+
+        limit = wip_limits.get(status)
+        if limit is None:
+            # No limit for this column
+            return True, 0, None, False
+
+        # Count current tasks in this status
+        project_path = self.base_dir / project_id
+        if not project_path.exists():
+            return True, 0, limit, False
+
+        status_path = project_path / status
+        if not status_path.exists():
+            return True, 0, limit, False
+
+        current_count = 0
+        # Count all .md files in status folder and subfolders
+        for file_path in status_path.rglob('*.md'):
+            if file_path.name != 'README.md':
+                current_count += 1
+
+        # Check if we're at or over the limit
+        block_on_limit = wip_warnings.get('block_on_limit', False)
+        warning_threshold = wip_warnings.get('warning_threshold', 0.8)
+
+        is_warning = current_count >= (limit * warning_threshold)
+        is_blocked = block_on_limit and current_count >= limit
+
+        allowed = not is_blocked
+
+        print(f"📊 WIP Check for {status}: {current_count}/{limit} (warning: {is_warning}, blocked: {is_blocked})")
+
+        return allowed, current_count, limit, is_warning
+
+    def get_wip_status(self, project_id):
+        """Get WIP status for all columns in a project"""
+        wip_limits = self.wip_config.get('wip_limits', {})
+        status_info = {}
+
+        for status, limit in wip_limits.items():
+            if limit is not None:
+                allowed, count, limit_val, is_warning = self.check_wip_limit(project_id, status)
+                status_info[status] = {
+                    'count': count,
+                    'limit': limit_val,
+                    'warning': is_warning,
+                    'blocked': not allowed
+                }
+
+        return status_info
+
+    def load_cfd_data(self):
+        """Load CFD historical data"""
+        cfd_file = Path(os.getcwd()) / 'cfd-data.json'
+        if not cfd_file.exists():
+            return {}
+
+        try:
+            with open(cfd_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Error loading CFD data: {e}")
+            return {}
+
+    def save_cfd_data(self, cfd_data):
+        """Save CFD data to file"""
+        cfd_file = Path(os.getcwd()) / 'cfd-data.json'
+        try:
+            with open(cfd_file, 'w', encoding='utf-8') as f:
+                json.dump(cfd_data, f, indent=2, ensure_ascii=False)
+            return True
+        except Exception as e:
+            print(f"Error saving CFD data: {e}")
+            return False
+
+    def take_cfd_snapshot(self, project_id):
+        """
+        Take a snapshot of current task distribution for CFD
+        Returns snapshot data
+        """
+        try:
+            # Get all tasks for project
+            project_path = self.base_dir / project_id
+
+            if not project_path.exists():
+                return None
+
+            # Count tasks in each state
+            state_counts = {
+                'backlog': 0,
+                'progress': 0,
+                'review': 0,
+                'testing': 0,
+                'done': 0
+            }
+
+            for state in state_counts.keys():
+                state_path = project_path / state
+                if not state_path.exists():
+                    # Try alternative names
+                    if state == 'progress':
+                        state_path = project_path / 'inprogress'
+                    if not state_path.exists():
+                        continue
+
+                # Count all .md files in state and subdirectories
+                for file_path in state_path.rglob('*.md'):
+                    if file_path.name != 'README.md':
+                        state_counts[state] += 1
+
+            # Create snapshot
+            from datetime import datetime, timezone
+            now = datetime.now(timezone.utc)
+            snapshot = {
+                'date': now.strftime('%Y-%m-%d'),
+                'timestamp': now.isoformat(),
+                **state_counts
+            }
+
+            return snapshot
+
+        except Exception as e:
+            print(f"Error taking CFD snapshot: {e}")
+            return None
+
+    def store_cfd_snapshot(self, project_id, snapshot):
+        """
+        Store a CFD snapshot for a project
+        Avoids duplicates for the same date
+        """
+        try:
+            cfd_data = self.load_cfd_data()
+
+            if project_id not in cfd_data:
+                cfd_data[project_id] = []
+
+            # Check if snapshot for today already exists
+            today = snapshot['date']
+            existing = [s for s in cfd_data[project_id] if s['date'] == today]
+
+            if existing:
+                # Update existing snapshot
+                index = cfd_data[project_id].index(existing[0])
+                cfd_data[project_id][index] = snapshot
+                print(f"📊 Updated CFD snapshot for {project_id} on {today}")
+            else:
+                # Add new snapshot
+                cfd_data[project_id].append(snapshot)
+                print(f"📊 Added new CFD snapshot for {project_id} on {today}")
+
+            # Sort by date
+            cfd_data[project_id].sort(key=lambda x: x['date'])
+
+            # Limit to last 90 days (configurable)
+            max_days = 90
+            if len(cfd_data[project_id]) > max_days:
+                cfd_data[project_id] = cfd_data[project_id][-max_days:]
+
+            # Save
+            self.save_cfd_data(cfd_data)
+            return True
+
+        except Exception as e:
+            print(f"Error storing CFD snapshot: {e}")
+            return False
 
     def create_project(self, project_data):
         """Create a new project folder with standard subfolders and README"""
@@ -309,14 +526,15 @@ class ProjectManager:
             return []
 
         # Check all status folders for developer directories
-        status_folders = ['progress', 'inprogress', 'review', 'testing', 'done']
-        
+        status_folders = ['backlog', 'progress', 'inprogress', 'review', 'testing', 'done']
+
         for folder_name in status_folders:
             folder_path = project_path / folder_name
             if folder_path.exists():
                 # List all subdirectories in status folder
                 for item in folder_path.iterdir():
-                    if item.is_dir() and (item.name.startswith('dev-') or item.name.startswith('tech-')):
+                    # Accept any directory that doesn't start with . (system folders)
+                    if item.is_dir() and not item.name.startswith('.'):
                         developers.add(item.name)
                         print(f"Found developer folder: {item.name} in {folder_name}")
 
@@ -400,6 +618,28 @@ class ProjectManager:
             # Extract task ID from filename
             task_id = file_path.stem
 
+            # Parse blocked fields
+            blocked = metadata.get('blocked', 'false').lower() in ['true', 'yes', '1']
+            blocked_at = metadata.get('blocked_at', '')
+            blocked_reason = metadata.get('blocked_reason', '')
+            unblocked_at = metadata.get('unblocked_at', '')
+
+            # Calculate blocked time if currently blocked
+            blocked_time_hours = None
+            blocked_time_days = None
+            is_currently_blocked = blocked and not unblocked_at
+
+            if blocked and blocked_at and is_currently_blocked:
+                try:
+                    from datetime import datetime, timezone
+                    blocked_start = datetime.fromisoformat(blocked_at.replace('Z', '+00:00'))
+                    now = datetime.now(timezone.utc)
+                    blocked_duration = now - blocked_start
+                    blocked_time_hours = blocked_duration.total_seconds() / 3600
+                    blocked_time_days = round(blocked_time_hours / 24, 1)
+                except Exception as e:
+                    print(f"Error calculating blocked time: {e}")
+
             # Build task object
             task = {
                 'id': task_id,
@@ -413,6 +653,21 @@ class ProjectManager:
                 'assignee': metadata.get('developer'),  # Alias
                 'status': metadata.get('status', 'backlog'),
                 'created': metadata.get('created', ''),
+                'created_at': metadata.get('created_at', metadata.get('created', '')),
+                'started_at': metadata.get('started_at', ''),
+                'done_at': metadata.get('done_at', ''),
+                'cycle_time_days': self.calculate_cycle_time(
+                    metadata.get('started_at'),
+                    metadata.get('done_at')
+                ),
+                'age_days': self.calculate_age(metadata.get('created_at', metadata.get('created', ''))),
+                'blocked': blocked,
+                'blocked_at': blocked_at,
+                'blocked_reason': blocked_reason,
+                'unblocked_at': unblocked_at,
+                'blocked_time_hours': blocked_time_hours,
+                'blocked_time_days': blocked_time_days,
+                'is_currently_blocked': is_currently_blocked,
                 'file_path': str(file_path)
             }
 
@@ -539,6 +794,54 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                     'error': str(e)
                 }, 500)
 
+        # Delete image endpoint
+        # Expected format: /api/projects/{project_id}/images/{task_id}/{filename}
+        elif (len(path_parts) == 6 and
+              path_parts[0] == 'api' and
+              path_parts[1] == 'projects' and
+              path_parts[3] == 'images'):
+
+            try:
+                project_id = unquote(path_parts[2])
+                task_id = unquote(path_parts[4])
+                filename = unquote(path_parts[5])
+
+                print(f"🗑️ Attempting to delete image: {filename} from task: {task_id}")
+
+                response_data, status_code = self.delete_task_image(project_id, task_id, filename)
+                self.send_json_response(response_data, status_code)
+
+            except Exception as e:
+                print(f"Error deleting image: {e}")
+                self.send_json_response({
+                    'success': False,
+                    'error': str(e)
+                }, 500)
+
+        # Delete attachment endpoint
+        # Expected format: /api/projects/{project_id}/attachments/{task_id}/{filename}
+        elif (len(path_parts) == 6 and
+              path_parts[0] == 'api' and
+              path_parts[1] == 'projects' and
+              path_parts[3] == 'attachments'):
+
+            try:
+                project_id = unquote(path_parts[2])
+                task_id = unquote(path_parts[4])
+                filename = unquote(path_parts[5])
+
+                print(f"🗑️ Attempting to delete attachment: {filename} from task: {task_id}")
+
+                response_data, status_code = self.delete_task_attachment(project_id, task_id, filename)
+                self.send_json_response(response_data, status_code)
+
+            except Exception as e:
+                print(f"Error deleting attachment: {e}")
+                self.send_json_response({
+                    'success': False,
+                    'error': str(e)
+                }, 500)
+
         # Формат для видалення проекту: /api/projects/{project_id}
         elif len(path_parts) == 3 and path_parts[0] == 'api' and path_parts[1] == 'projects':
             try:
@@ -632,6 +935,76 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                 }, 500)
             return
 
+        elif parsed_path.path == '/api/wip-config':
+            # Get WIP configuration
+            try:
+                self.send_json_response({
+                    'success': True,
+                    'config': self.project_manager.wip_config
+                })
+            except Exception as e:
+                self.send_json_response({
+                    'success': False,
+                    'error': str(e)
+                }, 500)
+            return
+
+        elif parsed_path.path.startswith('/api/projects/') and parsed_path.path.endswith('/wip-status'):
+            # Get WIP status for a project
+            # Expected format: /api/projects/{project_id}/wip-status
+            path_parts = parsed_path.path.strip('/').split('/')
+            if len(path_parts) == 4 and path_parts[3] == 'wip-status':
+                try:
+                    from urllib.parse import unquote
+                    project_id = unquote(path_parts[2])
+                    wip_status = self.project_manager.get_wip_status(project_id)
+                    self.send_json_response({
+                        'success': True,
+                        'wip_status': wip_status
+                    })
+                except Exception as e:
+                    self.send_json_response({
+                        'success': False,
+                        'error': str(e)
+                    }, 500)
+            return
+
+        elif parsed_path.path.startswith('/api/projects/') and parsed_path.path.endswith('/cfd-data'):
+            # Get CFD data for a project
+            # Expected format: /api/projects/{project_id}/cfd-data?days=30
+            path_parts = parsed_path.path.strip('/').split('/')
+            if len(path_parts) == 4 and path_parts[3] == 'cfd-data':
+                try:
+                    from urllib.parse import unquote
+                    project_id = unquote(path_parts[2])
+
+                    # Parse query params for days filter
+                    query_params = parse_qs(parsed_path.query)
+                    days = int(query_params.get('days', [30])[0])
+
+                    # Get CFD data
+                    cfd_data = self.project_manager.load_cfd_data()
+                    project_data = cfd_data.get(project_id, [])
+
+                    # Filter to last N days
+                    if days and len(project_data) > days:
+                        project_data = project_data[-days:]
+
+                    self.send_json_response({
+                        'success': True,
+                        'data': project_data,
+                        'project_id': project_id,
+                        'days': len(project_data)
+                    })
+                    print(f"📊 Served CFD data for {project_id}: {len(project_data)} snapshots")
+                except Exception as e:
+                    print(f"Error getting CFD data: {e}")
+                    self.send_json_response({
+                        'success': False,
+                        'error': str(e)
+                    }, 500)
+            return
+
         elif parsed_path.path.startswith('/api/projects/') and '/tasks/' in parsed_path.path:
             # Get single task for a project
             # Expected format: /api/projects/{project_id}/tasks/{task_id}
@@ -718,18 +1091,69 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                 }, 500)
             return
 
-        # Check if it's an image serving endpoint
-        # Expected format: /api/projects/{project_id}/images/{filename}
+        # Check if it's a GET images list endpoint for task
+        # Expected format: /api/projects/{project_id}/tasks/{task_id}/images
         path_parts = parsed_path.path.strip('/').split('/')
-        if (len(path_parts) == 5 and
+        if (len(path_parts) == 6 and
             path_parts[0] == 'api' and
             path_parts[1] == 'projects' and
-            path_parts[3] == 'images'):
+            path_parts[3] == 'tasks' and
+            path_parts[5] == 'images'):
 
             try:
                 from urllib.parse import unquote
                 project_id = unquote(path_parts[2])
-                filename = unquote(path_parts[4])
+                task_id = unquote(path_parts[4])
+
+                response_data, status_code = self.get_task_images(project_id, task_id)
+                self.send_json_response(response_data, status_code)
+                return
+
+            except Exception as e:
+                print(f"Error getting task images: {e}")
+                self.send_json_response({
+                    'success': False,
+                    'error': str(e)
+                }, 500)
+                return
+
+        # Check if it's a GET attachments list endpoint for task
+        # Expected format: /api/projects/{project_id}/tasks/{task_id}/attachments
+        elif (len(path_parts) == 6 and
+              path_parts[0] == 'api' and
+              path_parts[1] == 'projects' and
+              path_parts[3] == 'tasks' and
+              path_parts[5] == 'attachments'):
+
+            try:
+                from urllib.parse import unquote
+                project_id = unquote(path_parts[2])
+                task_id = unquote(path_parts[4])
+
+                response_data, status_code = self.get_task_attachments(project_id, task_id)
+                self.send_json_response(response_data, status_code)
+                return
+
+            except Exception as e:
+                print(f"Error getting task attachments: {e}")
+                self.send_json_response({
+                    'success': False,
+                    'error': str(e)
+                }, 500)
+                return
+
+        # Check if it's an image serving endpoint with thumbnails support
+        # Expected format: /api/projects/{project_id}/images/{task_id}/{filename}
+        # Or: /api/projects/{project_id}/images/{task_id}/thumbnails/{filename}
+        # Or legacy: /api/projects/{project_id}/images/{filename}
+        elif ((len(path_parts) == 6 or len(path_parts) == 7) and
+              path_parts[0] == 'api' and
+              path_parts[1] == 'projects' and
+              path_parts[3] == 'images'):
+
+            try:
+                from urllib.parse import unquote
+                project_id = unquote(path_parts[2])
 
                 # Find project directory
                 project_path = Path(PROJECTS_BASE_DIR) / project_id
@@ -742,7 +1166,23 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                     self.send_error(404, 'Images directory not found')
                     return
 
-                image_path = images_dir / filename
+                # Determine path structure
+                if len(path_parts) == 7:
+                    # /api/projects/{project_id}/images/{task_id}/thumbnails/{filename}
+                    task_id = unquote(path_parts[4])
+                    subfolder = unquote(path_parts[5])  # 'thumbnails'
+                    filename = unquote(path_parts[6])
+                    image_path = images_dir / task_id / subfolder / filename
+                elif len(path_parts) == 6:
+                    # /api/projects/{project_id}/images/{task_id}/{filename}
+                    task_id = unquote(path_parts[4])
+                    filename = unquote(path_parts[5])
+                    image_path = images_dir / task_id / filename
+                else:
+                    # Legacy: /api/projects/{project_id}/images/{filename}
+                    filename = unquote(path_parts[4])
+                    image_path = images_dir / filename
+
                 if not image_path.exists():
                     self.send_error(404, f'Image "{filename}" not found')
                     return
@@ -762,6 +1202,107 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(content)
                 print(f"🖼️ Served image: {image_path}")
+                return
+
+            except Exception as e:
+                print(f"Error serving image: {e}")
+                self.send_error(500, f'Error serving image: {str(e)}')
+                return
+
+        # Attachment serving/download endpoint
+        # Expected format: /api/projects/{project_id}/attachments/{task_id}/{filename}
+        elif ((len(path_parts) == 6) and
+              path_parts[0] == 'api' and
+              path_parts[1] == 'projects' and
+              path_parts[3] == 'attachments'):
+
+            try:
+                from urllib.parse import unquote
+                project_id = unquote(path_parts[2])
+
+                # Find project directory
+                project_path = Path(PROJECTS_BASE_DIR) / project_id
+                if not project_path.exists():
+                    self.send_error(404, f'Project "{project_id}" not found')
+                    return
+
+                attachments_dir = project_path / 'attachments'
+
+                # Parse path: /api/projects/{project_id}/attachments/{task_id}/{filename}
+                task_id = unquote(path_parts[4])
+                filename = unquote(path_parts[5])
+                attachment_path = attachments_dir / task_id / filename
+
+                if not attachment_path.exists():
+                    self.send_error(404, f'Attachment "{filename}" not found')
+                    return
+
+                # Serve the attachment file with download headers
+                import mimetypes
+                mime_type, _ = mimetypes.guess_type(str(attachment_path))
+                if not mime_type:
+                    mime_type = 'application/octet-stream'
+
+                with open(attachment_path, 'rb') as f:
+                    content = f.read()
+
+                # Extract original filename (remove timestamp prefix)
+                original_filename = '-'.join(filename.split('-')[2:]) if '-' in filename else filename
+
+                self.send_response(200)
+                self.send_header('Content-Type', mime_type)
+                self.send_header('Content-Length', str(len(content)))
+                self.send_header('Content-Disposition', f'attachment; filename="{original_filename}"')
+                self.end_headers()
+                self.wfile.write(content)
+                print(f"📎 Served attachment: {attachment_path}")
+                return
+
+            except Exception as e:
+                print(f"Error serving attachment: {e}")
+                self.send_error(500, f'Error serving attachment: {str(e)}')
+                return
+
+        # Legacy image serving endpoint
+        # Expected format: /api/projects/{project_id}/images/{filename}
+        elif (len(path_parts) == 5 and
+              path_parts[0] == 'api' and
+              path_parts[1] == 'projects' and
+              path_parts[3] == 'images'):
+
+            try:
+                from urllib.parse import unquote
+                project_id = unquote(path_parts[2])
+                filename = unquote(path_parts[4])
+
+                # Find project directory
+                project_path = Path(PROJECTS_BASE_DIR) / project_id
+                if not project_path.exists():
+                    self.send_error(404, f'Project "{project_id}" not found')
+                    return
+
+                images_dir = project_path / 'images'
+                image_path = images_dir / filename
+
+                if not image_path.exists():
+                    self.send_error(404, f'Image "{filename}" not found')
+                    return
+
+                # Serve the image file
+                import mimetypes
+                mime_type, _ = mimetypes.guess_type(str(image_path))
+                if not mime_type:
+                    mime_type = 'application/octet-stream'
+
+                with open(image_path, 'rb') as f:
+                    content = f.read()
+
+                self.send_response(200)
+                self.send_header('Content-Type', mime_type)
+                self.send_header('Content-Length', str(len(content)))
+                self.end_headers()
+                self.wfile.write(content)
+                print(f"🖼️ Served legacy image: {image_path}")
                 return
 
             except Exception as e:
@@ -1578,7 +2119,31 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                 }, 500)
                 print(f"Error creating task: {e}")
 
-        # Check if it's an image upload endpoint
+        # Check if it's a task-specific image upload endpoint
+        # Expected format: /api/projects/{project_id}/tasks/{task_id}/images
+        elif (len(path_parts) == 6 and
+              path_parts[0] == 'api' and
+              path_parts[1] == 'projects' and
+              path_parts[3] == 'tasks' and
+              path_parts[5] == 'images'):
+
+            try:
+                from urllib.parse import unquote
+                project_id = unquote(path_parts[2])
+                task_id = unquote(path_parts[4])
+                print(f"🖼️ Image upload request for task: {project_id}/{task_id}")
+
+                # Handle multipart form data upload with task_id
+                self.handle_image_upload(project_id, task_id)
+
+            except Exception as e:
+                self.send_json_response({
+                    'success': False,
+                    'error': str(e)
+                }, 500)
+                print(f"Error uploading image: {e}")
+
+        # Check if it's an image upload endpoint (legacy)
         # Expected format: /api/projects/{project_id}/upload-image
         elif (len(path_parts) == 4 and
               path_parts[0] == 'api' and
@@ -1599,6 +2164,340 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                     'error': str(e)
                 }, 500)
                 print(f"Error uploading image: {e}")
+
+        # Check if it's an attachment upload endpoint
+        # Expected format: /api/projects/{project_id}/tasks/{task_id}/attachments
+        elif (len(path_parts) == 6 and
+              path_parts[0] == 'api' and
+              path_parts[1] == 'projects' and
+              path_parts[3] == 'tasks' and
+              path_parts[5] == 'attachments'):
+
+            try:
+                from urllib.parse import unquote
+                project_id = unquote(path_parts[2])
+                task_id = unquote(path_parts[4])
+                print(f"📎 Attachment upload request for task: {project_id}/{task_id}")
+
+                # Handle multipart form data upload with task_id
+                self.handle_attachment_upload(project_id, task_id)
+
+            except Exception as e:
+                self.send_json_response({
+                    'success': False,
+                    'error': str(e)
+                }, 500)
+                print(f"Error uploading attachment: {e}")
+
+        # Block task endpoint
+        # Expected format: /api/projects/{project_id}/tasks/{task_id}/block
+        elif (len(path_parts) == 6 and
+              path_parts[0] == 'api' and
+              path_parts[1] == 'projects' and
+              path_parts[3] == 'tasks' and
+              path_parts[5] == 'block'):
+
+            try:
+                from urllib.parse import unquote
+                from datetime import datetime, timezone
+
+                project_id = unquote(path_parts[2])
+                task_id = unquote(path_parts[4])
+
+                print(f"🚫 Block task request: {task_id} in project {project_id}")
+
+                # Read request body
+                content_length = int(self.headers.get('Content-Length', 0))
+                if content_length > 0:
+                    body = self.rfile.read(content_length)
+                    data = json.loads(body.decode('utf-8'))
+                    blocked_reason = data.get('reason', 'No reason provided')
+                else:
+                    blocked_reason = 'No reason provided'
+
+                # Find task file
+                task_file_path = None
+                task_status = None
+                task_developer = None
+
+                project_path = self.project_manager.base_dir / project_id
+                if not project_path.exists():
+                    self.send_json_response({
+                        'success': False,
+                        'error': f'Project {project_id} not found'
+                    }, 404)
+                    return
+
+                # Search for task in all status folders
+                for status in ['backlog', 'progress', 'review', 'testing', 'done']:
+                    status_path = project_path / status
+                    if status_path.exists():
+                        # Check direct folder
+                        task_file = status_path / f"{task_id}.md"
+                        if task_file.exists():
+                            task_file_path = task_file
+                            task_status = status
+                            break
+
+                        # Check developer subfolders
+                        for dev_folder in status_path.iterdir():
+                            if dev_folder.is_dir():
+                                task_file = dev_folder / f"{task_id}.md"
+                                if task_file.exists():
+                                    task_file_path = task_file
+                                    task_status = status
+                                    task_developer = dev_folder.name
+                                    break
+                        if task_file_path:
+                            break
+
+                if not task_file_path:
+                    self.send_json_response({
+                        'success': False,
+                        'error': 'Task not found'
+                    }, 404)
+                    return
+
+                # Parse current task
+                task = self.project_manager.parse_task_file(task_file_path)
+                if not task:
+                    self.send_json_response({
+                        'success': False,
+                        'error': 'Failed to parse task file'
+                    }, 500)
+                    return
+
+                # Update blocked fields
+                task['blocked'] = True
+                task['blocked_at'] = datetime.now(timezone.utc).isoformat()
+                task['blocked_reason'] = blocked_reason
+                task['unblocked_at'] = None
+
+                # Update task file
+                success = self.update_task_file(project_id, task)
+
+                if success:
+                    self.send_json_response({
+                        'success': True,
+                        'message': 'Task blocked successfully',
+                        'task': task
+                    })
+                    print(f"✅ Task {task_id} blocked: {blocked_reason}")
+                else:
+                    self.send_json_response({
+                        'success': False,
+                        'error': 'Failed to update task file'
+                    }, 500)
+
+            except Exception as e:
+                print(f"Error blocking task: {e}")
+                import traceback
+                traceback.print_exc()
+                self.send_json_response({
+                    'success': False,
+                    'error': str(e)
+                }, 500)
+            return
+
+        # Unblock task endpoint
+        # Expected format: /api/projects/{project_id}/tasks/{task_id}/unblock
+        elif (len(path_parts) == 6 and
+              path_parts[0] == 'api' and
+              path_parts[1] == 'projects' and
+              path_parts[3] == 'tasks' and
+              path_parts[5] == 'unblock'):
+
+            try:
+                from urllib.parse import unquote
+                from datetime import datetime, timezone
+
+                project_id = unquote(path_parts[2])
+                task_id = unquote(path_parts[4])
+
+                print(f"✅ Unblock task request: {task_id} in project {project_id}")
+
+                # Find task file
+                task_file_path = None
+                task_status = None
+                task_developer = None
+
+                project_path = self.project_manager.base_dir / project_id
+                if not project_path.exists():
+                    self.send_json_response({
+                        'success': False,
+                        'error': f'Project {project_id} not found'
+                    }, 404)
+                    return
+
+                # Search for task in all status folders
+                for status in ['backlog', 'progress', 'review', 'testing', 'done']:
+                    status_path = project_path / status
+                    if status_path.exists():
+                        # Check direct folder
+                        task_file = status_path / f"{task_id}.md"
+                        if task_file.exists():
+                            task_file_path = task_file
+                            task_status = status
+                            break
+
+                        # Check developer subfolders
+                        for dev_folder in status_path.iterdir():
+                            if dev_folder.is_dir():
+                                task_file = dev_folder / f"{task_id}.md"
+                                if task_file.exists():
+                                    task_file_path = task_file
+                                    task_status = status
+                                    task_developer = dev_folder.name
+                                    break
+                        if task_file_path:
+                            break
+
+                if not task_file_path:
+                    self.send_json_response({
+                        'success': False,
+                        'error': 'Task not found'
+                    }, 404)
+                    return
+
+                # Parse current task
+                task = self.project_manager.parse_task_file(task_file_path)
+                if not task:
+                    self.send_json_response({
+                        'success': False,
+                        'error': 'Failed to parse task file'
+                    }, 500)
+                    return
+
+                # Update blocked fields
+                task['blocked'] = False
+                task['unblocked_at'] = datetime.now(timezone.utc).isoformat()
+                # Keep blocked_at and blocked_reason for historical data
+
+                # Update task file
+                success = self.update_task_file(project_id, task)
+
+                if success:
+                    self.send_json_response({
+                        'success': True,
+                        'message': 'Task unblocked successfully',
+                        'task': task
+                    })
+                    print(f"✅ Task {task_id} unblocked")
+                else:
+                    self.send_json_response({
+                        'success': False,
+                        'error': 'Failed to update task file'
+                    }, 500)
+
+            except Exception as e:
+                print(f"Error unblocking task: {e}")
+                import traceback
+                traceback.print_exc()
+                self.send_json_response({
+                    'success': False,
+                    'error': str(e)
+                }, 500)
+            return
+
+        # CFD snapshot endpoint for single project
+        # Expected format: /api/projects/{project_id}/cfd-snapshot
+        elif (len(path_parts) == 4 and
+              path_parts[0] == 'api' and
+              path_parts[1] == 'projects' and
+              path_parts[3] == 'cfd-snapshot'):
+
+            try:
+                from urllib.parse import unquote
+                project_id = unquote(path_parts[2])
+
+                print(f"📊 CFD snapshot request for project: {project_id}")
+
+                # Take snapshot
+                snapshot = self.project_manager.take_cfd_snapshot(project_id)
+
+                if not snapshot:
+                    self.send_json_response({
+                        'success': False,
+                        'error': 'Failed to create snapshot'
+                    }, 500)
+                    return
+
+                # Store snapshot
+                self.project_manager.store_cfd_snapshot(project_id, snapshot)
+
+                self.send_json_response({
+                    'success': True,
+                    'message': 'Snapshot created successfully',
+                    'snapshot': snapshot
+                })
+                print(f"✅ CFD snapshot created for {project_id}")
+
+            except Exception as e:
+                print(f"Error creating CFD snapshot: {e}")
+                import traceback
+                traceback.print_exc()
+                self.send_json_response({
+                    'success': False,
+                    'error': str(e)
+                }, 500)
+            return
+
+        # CFD snapshot for all projects
+        # Expected format: /api/cfd-snapshot-all
+        elif parsed_path.path == '/api/cfd-snapshot-all':
+            try:
+                print("📊 CFD snapshot request for all projects")
+
+                results = []
+                base_dir = self.project_manager.base_dir
+
+                if not base_dir.exists():
+                    self.send_json_response({
+                        'success': False,
+                        'error': 'Working directory not found'
+                    }, 404)
+                    return
+
+                # Iterate through all project directories
+                for item in base_dir.iterdir():
+                    if item.is_dir():
+                        # Check if it looks like a project (has expected folders)
+                        expected_dirs = ['backlog', 'progress', 'inprogress', 'review', 'testing', 'done']
+                        has_states = any((item / d).exists() for d in expected_dirs)
+
+                        if has_states:
+                            project_id = item.name
+                            snapshot = self.project_manager.take_cfd_snapshot(project_id)
+                            if snapshot:
+                                self.project_manager.store_cfd_snapshot(project_id, snapshot)
+                                results.append({
+                                    'project': project_id,
+                                    'success': True,
+                                    'snapshot': snapshot
+                                })
+                            else:
+                                results.append({
+                                    'project': project_id,
+                                    'success': False,
+                                    'error': 'Failed to create snapshot'
+                                })
+
+                self.send_json_response({
+                    'success': True,
+                    'message': f'Created snapshots for {len(results)} projects',
+                    'results': results
+                })
+                print(f"✅ CFD snapshots created for {len(results)} projects")
+
+            except Exception as e:
+                print(f"Error creating all CFD snapshots: {e}")
+                import traceback
+                traceback.print_exc()
+                self.send_json_response({
+                    'success': False,
+                    'error': str(e)
+                }, 500)
+            return
 
         # Select working directory endpoint
         elif parsed_path.path == '/api/select-directory':
@@ -1961,7 +2860,21 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
         print(f"  timeEstimate: {repr(task_data.get('timeEstimate'))}")
         print(f"  timeSpent: {repr(task_data.get('timeSpent'))}")
         print(f"  task_data keys: {list(task_data.keys())}")
-        
+
+        # Auto-track cycle time timestamps
+        created_at = task_data.get('created_at') or task_data.get('created')
+        started_at = task_data.get('started_at')
+        done_at = task_data.get('done_at')
+
+        # Automatically set timestamps based on status changes
+        if new_status in ['progress', 'inprogress'] and not started_at:
+            started_at = datetime.now().isoformat()
+            print(f"⏱️ Auto-set started_at: {started_at}")
+
+        if new_status == 'done' and not done_at:
+            done_at = datetime.now().isoformat()
+            print(f"✅ Auto-set done_at: {done_at}")
+
         frontmatter = {
             'title': task_data.get('title', ''),
             'estimate': task_data.get('timeEstimate', '0h'),
@@ -1969,12 +2882,21 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
             'priority': task_data.get('priority', 'medium'),
             'developer': task_data.get('developer'),
             'status': new_status,
-            'created': task_data.get('created', datetime.now().isoformat()[:10])
+            'created': task_data.get('created', datetime.now().isoformat()[:10]),
+            'created_at': created_at,
+            'started_at': started_at,
+            'done_at': done_at,
+            'blocked': task_data.get('blocked', False),
+            'blocked_at': task_data.get('blocked_at'),
+            'blocked_reason': task_data.get('blocked_reason'),
+            'unblocked_at': task_data.get('unblocked_at')
         }
-        
+
         print(f"mini-server: Writing frontmatter:")
         print(f"  estimate: {repr(frontmatter['estimate'])}")
         print(f"  spent_time: {repr(frontmatter['spent_time'])}")
+        print(f"  started_at: {repr(frontmatter['started_at'])}")
+        print(f"  done_at: {repr(frontmatter['done_at'])}")
 
         # Remove None values
         frontmatter = {k: v for k, v in frontmatter.items() if v is not None}
@@ -2066,15 +2988,25 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                     lines.append(f"{key}: {value}")
             return '\n'.join(lines)
 
-        # Prepare frontmatter
+        # Prepare frontmatter with cycle time tracking
+        created_at = datetime.now().isoformat()
+        status = task_data.get('status', target_folder)
+
+        # Set started_at if creating task in progress
+        started_at = None
+        if status in ['progress', 'inprogress']:
+            started_at = created_at
+
         frontmatter = {
             'title': task_data.get('title', ''),
             'estimate': task_data.get('timeEstimate', '2h'),
             'spent_time': task_data.get('timeSpent', '0h'),
             'priority': task_data.get('priority', 'medium'),
             'developer': task_data.get('developer') or task_data.get('assignee'),
-            'status': task_data.get('status', target_folder),
-            'created': task_data.get('created', datetime.now().isoformat()[:10])
+            'status': status,
+            'created': datetime.now().isoformat()[:10],
+            'created_at': created_at,
+            'started_at': started_at
         }
 
         # Remove None values
@@ -2094,13 +3026,18 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
             print(f"Error writing task file {task_file}: {e}")
             return False
     
-    def handle_image_upload(self, project_id):
-        """Handle multipart image upload"""
+    def handle_image_upload(self, project_id, task_id=None):
+        """
+        Handle multipart image upload with task-specific directories and thumbnails
+        Supports: /api/projects/{project_id}/upload-image (legacy)
+        Or: /api/projects/{project_id}/tasks/{task_id}/images (new)
+        """
         import cgi
         import uuid
         import os
         from pathlib import Path
-        
+        import time
+
         # Find project directory
         project_path = Path(PROJECTS_BASE_DIR) / project_id
         if not project_path.exists():
@@ -2109,11 +3046,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                 'error': f'Project "{project_id}" not found'
             }, 404)
             return
-        
-        # Create images directory
-        images_dir = project_path / 'images'
-        images_dir.mkdir(exist_ok=True)
-        
+
         # Parse multipart form data
         form = cgi.FieldStorage(
             fp=self.rfile,
@@ -2123,14 +3056,14 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                 'CONTENT_TYPE': self.headers['Content-Type'],
             }
         )
-        
+
         if 'image' not in form:
             self.send_json_response({
                 'success': False,
                 'error': 'No image file provided'
             }, 400)
             return
-        
+
         file_item = form['image']
         if not file_item.filename:
             self.send_json_response({
@@ -2138,46 +3071,495 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                 'error': 'No file selected'
             }, 400)
             return
-        
-        # Check file extension
-        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'}
-        if not ('.' in file_item.filename and 
-                file_item.filename.rsplit('.', 1)[1].lower() in allowed_extensions):
+
+        # Check file size (5MB limit)
+        file_data = file_item.file.read()
+        if len(file_data) > 5 * 1024 * 1024:
             self.send_json_response({
                 'success': False,
-                'error': 'File must be an image (png, jpg, jpeg, gif, webp, svg)'
+                'error': 'File size exceeds 5MB limit'
             }, 400)
             return
-        
-        # Generate unique filename
-        file_extension = file_item.filename.rsplit('.', 1)[1].lower()
-        unique_filename = f"{uuid.uuid4().hex[:8]}_{file_item.filename}"
-        file_path = images_dir / unique_filename
-        
-        # Save file
+
+        # Check file extension
+        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+        file_extension = file_item.filename.rsplit('.', 1)[1].lower() if '.' in file_item.filename else ''
+        if file_extension not in allowed_extensions:
+            self.send_json_response({
+                'success': False,
+                'error': 'File must be an image (png, jpg, jpeg, gif, webp)'
+            }, 400)
+            return
+
+        # Get or extract task_id from form
+        if not task_id and 'task_id' in form:
+            task_id = form.getvalue('task_id')
+
+        # Create task-specific or project-wide images directory
+        if task_id:
+            # Task-specific structure: images/TASK-123/
+            images_base = project_path / 'images' / task_id
+            images_base.mkdir(parents=True, exist_ok=True)
+            thumbnails_dir = images_base / 'thumbnails'
+            thumbnails_dir.mkdir(exist_ok=True)
+        else:
+            # Legacy: project-wide images/
+            images_base = project_path / 'images'
+            images_base.mkdir(exist_ok=True)
+            thumbnails_dir = None
+
+        # Generate unique filename with timestamp
+        timestamp = int(time.time() * 1000)
+        safe_filename = file_item.filename.replace(' ', '_')
+        unique_filename = f"{timestamp}-{safe_filename}"
+        file_path = images_base / unique_filename
+
+        # Save original file
         try:
             with open(file_path, 'wb') as f:
-                f.write(file_item.file.read())
-            
-            # Generate API path for markdown (accessible via web)
-            api_path = f"/api/projects/{project_id}/images/{unique_filename}"
-            
-            print(f"Image uploaded: {file_path}")
-            
-            self.send_json_response({
+                f.write(file_data)
+
+            print(f"📷 Image uploaded: {file_path}")
+
+            # Create thumbnail if PIL is available
+            thumbnail_filename = None
+            thumbnail_url = None
+            try:
+                from PIL import Image
+
+                # Open image
+                img = Image.open(file_path)
+
+                # Create thumbnail (200x200)
+                thumb_img = img.copy()
+                thumb_img.thumbnail((200, 200), Image.Resampling.LANCZOS)
+
+                # Save thumbnail
+                if thumbnails_dir:
+                    thumb_name = f"{timestamp}-{safe_filename.rsplit('.', 1)[0]}_thumb.{file_extension}"
+                    thumb_path = thumbnails_dir / thumb_name
+                    thumb_img.save(thumb_path, optimize=True, quality=85)
+                    thumbnail_filename = thumb_name
+
+                    if task_id:
+                        thumbnail_url = f"/api/projects/{project_id}/images/{task_id}/thumbnails/{thumb_name}"
+
+                    print(f"🖼️ Thumbnail created: {thumb_path}")
+
+            except ImportError:
+                print("⚠️ PIL not available, skipping thumbnail creation")
+            except Exception as e:
+                print(f"⚠️ Error creating thumbnail: {e}")
+
+            # Generate API paths
+            if task_id:
+                api_path = f"/api/projects/{project_id}/images/{task_id}/{unique_filename}"
+            else:
+                api_path = f"/api/projects/{project_id}/images/{unique_filename}"
+
+            # Update metadata.json
+            self.update_image_metadata(project_path, task_id, {
+                'id': unique_filename,
+                'filename': unique_filename,
+                'original_name': file_item.filename,
+                'url': api_path,
+                'thumbnail_url': thumbnail_url,
+                'size': len(file_data),
+                'uploaded_at': datetime.now().isoformat(),
+                'task_id': task_id
+            })
+
+            # Prepare response
+            response_data = {
                 'success': True,
                 'message': 'Image uploaded successfully',
+                'image_id': unique_filename,
                 'filename': unique_filename,
-                'path': api_path,
+                'url': api_path,
+                'thumbnail_url': thumbnail_url or api_path,
                 'markdown': f"![{file_item.filename}]({api_path})"
-            })
-            
+            }
+
+            self.send_json_response(response_data)
+
         except Exception as e:
-            print(f"Error saving image: {e}")
+            print(f"❌ Error saving image: {e}")
             self.send_json_response({
                 'success': False,
                 'error': f'Failed to save image: {str(e)}'
             }, 500)
+
+    def update_image_metadata(self, project_path, task_id, image_data):
+        """Update metadata.json with new image info"""
+        try:
+            metadata_file = project_path / 'images' / 'metadata.json'
+
+            # Load existing metadata
+            metadata = {}
+            if metadata_file.exists():
+                with open(metadata_file, 'r', encoding='utf-8') as f:
+                    metadata = json.load(f)
+
+            # Initialize task_id entry if needed
+            if task_id:
+                if task_id not in metadata:
+                    metadata[task_id] = {'images': []}
+
+                # Add new image
+                metadata[task_id]['images'].append(image_data)
+            else:
+                # Legacy: store in 'global' key
+                if 'global' not in metadata:
+                    metadata['global'] = {'images': []}
+                metadata['global']['images'].append(image_data)
+
+            # Save metadata
+            metadata_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(metadata_file, 'w', encoding='utf-8') as f:
+                json.dump(metadata, f, indent=2, ensure_ascii=False)
+
+            print(f"📝 Updated metadata for task: {task_id or 'global'}")
+
+        except Exception as e:
+            print(f"⚠️ Error updating metadata: {e}")
+
+    def get_task_images(self, project_id, task_id):
+        """Get all images for a specific task"""
+        try:
+            project_path = Path(PROJECTS_BASE_DIR) / project_id
+            if not project_path.exists():
+                return {'success': False, 'error': 'Project not found'}, 404
+
+            metadata_file = project_path / 'images' / 'metadata.json'
+
+            if not metadata_file.exists():
+                return {'success': True, 'images': []}, 200
+
+            with open(metadata_file, 'r', encoding='utf-8') as f:
+                metadata = json.load(f)
+
+            task_data = metadata.get(task_id, {})
+            images = task_data.get('images', [])
+
+            return {'success': True, 'images': images}, 200
+
+        except Exception as e:
+            print(f"Error getting task images: {e}")
+            return {'success': False, 'error': str(e)}, 500
+
+    def delete_task_image(self, project_id, task_id, filename):
+        """Delete a specific image"""
+        try:
+            project_path = Path(PROJECTS_BASE_DIR) / project_id
+            if not project_path.exists():
+                return {'success': False, 'error': 'Project not found'}, 404
+
+            # Delete image file
+            if task_id:
+                image_path = project_path / 'images' / task_id / filename
+                thumb_name = filename.rsplit('.', 1)[0] + '_thumb.' + filename.rsplit('.', 1)[1]
+                thumb_path = project_path / 'images' / task_id / 'thumbnails' / thumb_name
+            else:
+                image_path = project_path / 'images' / filename
+                thumb_path = None
+
+            if image_path.exists():
+                image_path.unlink()
+                print(f"🗑️ Deleted image: {image_path}")
+
+            if thumb_path and thumb_path.exists():
+                thumb_path.unlink()
+                print(f"🗑️ Deleted thumbnail: {thumb_path}")
+
+            # Update metadata
+            metadata_file = project_path / 'images' / 'metadata.json'
+            if metadata_file.exists():
+                with open(metadata_file, 'r', encoding='utf-8') as f:
+                    metadata = json.load(f)
+
+                key = task_id if task_id else 'global'
+                if key in metadata:
+                    metadata[key]['images'] = [
+                        img for img in metadata[key]['images']
+                        if img['filename'] != filename
+                    ]
+
+                with open(metadata_file, 'w', encoding='utf-8') as f:
+                    json.dump(metadata, f, indent=2, ensure_ascii=False)
+
+            return {'success': True, 'message': 'Image deleted'}, 200
+
+        except Exception as e:
+            print(f"Error deleting image: {e}")
+            return {'success': False, 'error': str(e)}, 500
+
+    # ===== ATTACHMENT HANDLERS =====
+
+    def handle_attachment_upload(self, project_id, task_id):
+        """Handle attachment file upload"""
+        content_type = self.headers.get('Content-Type', '')
+        if 'multipart/form-data' not in content_type:
+            self.send_json_response({
+                'success': False,
+                'error': 'Content-Type must be multipart/form-data'
+            }, 400)
+            return
+
+        # Parse multipart form data
+        import cgi
+        form = cgi.FieldStorage(
+            fp=self.rfile,
+            headers=self.headers,
+            environ={'REQUEST_METHOD': 'POST'}
+        )
+
+        if 'file' not in form:
+            self.send_json_response({
+                'success': False,
+                'error': 'No file provided'
+            }, 400)
+            return
+
+        file_item = form['file']
+        if not file_item.filename:
+            self.send_json_response({
+                'success': False,
+                'error': 'No file selected'
+            }, 400)
+            return
+
+        # Read file data
+        file_data = file_item.file.read()
+
+        # Validate file size (25MB limit)
+        max_size = 25 * 1024 * 1024  # 25MB
+        if len(file_data) > max_size:
+            self.send_json_response({
+                'success': False,
+                'error': f'File size exceeds 25MB limit'
+            }, 400)
+            return
+
+        # Security: Block dangerous extensions
+        blocked_extensions = ['.exe', '.bat', '.sh', '.app', '.dll', '.so', '.dylib']
+        file_ext = Path(file_item.filename).suffix.lower()
+        if file_ext in blocked_extensions:
+            self.send_json_response({
+                'success': False,
+                'error': f'File type {file_ext} is not allowed for security reasons'
+            }, 400)
+            return
+
+        # Find project
+        project_path = Path(PROJECTS_BASE_DIR) / project_id
+        if not project_path.exists():
+            self.send_json_response({
+                'success': False,
+                'error': f'Project {project_id} not found'
+            }, 404)
+            return
+
+        # Create attachments directory structure
+        attachments_base = project_path / 'attachments' / task_id
+        attachments_base.mkdir(parents=True, exist_ok=True)
+
+        # Generate unique filename with timestamp
+        import time
+        timestamp = int(time.time() * 1000)
+        safe_filename = file_item.filename.replace(' ', '_')
+        # Sanitize filename (remove special chars)
+        import re
+        safe_filename = re.sub(r'[^a-zA-Z0-9._-]', '', safe_filename)
+        unique_filename = f"{timestamp}-{task_id}-{safe_filename}"
+        file_path = attachments_base / unique_filename
+
+        # Save file
+        try:
+            with open(file_path, 'wb') as f:
+                f.write(file_data)
+
+            print(f"📎 Attachment uploaded: {file_path}")
+
+            # Generate API path
+            api_path = f"/api/projects/{project_id}/attachments/{task_id}/{unique_filename}"
+
+            # Update metadata
+            self.update_attachment_metadata(project_path, task_id, {
+                'id': unique_filename,
+                'filename': unique_filename,
+                'original_name': file_item.filename,
+                'url': api_path,
+                'size': len(file_data),
+                'type': file_ext,
+                'uploaded_at': datetime.now().isoformat(),
+                'task_id': task_id
+            })
+
+            # Response
+            response_data = {
+                'success': True,
+                'message': 'Attachment uploaded successfully',
+                'attachment_id': unique_filename,
+                'filename': unique_filename,
+                'original_name': file_item.filename,
+                'url': api_path,
+                'size': len(file_data),
+                'type': file_ext
+            }
+
+            self.send_json_response(response_data)
+
+        except Exception as e:
+            print(f"❌ Error saving attachment: {e}")
+            self.send_json_response({
+                'success': False,
+                'error': str(e)
+            }, 500)
+
+    def get_task_attachments(self, project_id, task_id):
+        """Get list of attachments for a task"""
+        try:
+            project_path = Path(PROJECTS_BASE_DIR) / project_id
+            if not project_path.exists():
+                return {'success': False, 'error': 'Project not found'}, 404
+
+            # Try to read from metadata first (most reliable)
+            metadata_file = project_path / 'attachments' / 'metadata.json'
+            if metadata_file.exists():
+                try:
+                    with open(metadata_file, 'r', encoding='utf-8') as f:
+                        metadata = json.load(f)
+                        task_metadata = metadata.get(task_id, {})
+                        attachments = task_metadata.get('attachments', [])
+
+                        if attachments:
+                            return {
+                                'success': True,
+                                'attachments': attachments,
+                                'count': len(attachments)
+                            }, 200
+                except Exception as e:
+                    print(f"Warning: metadata read failed: {e}")
+
+            # Fallback: scan files (with fixed parsing)
+            attachments_dir = project_path / 'attachments' / task_id
+            attachments = []
+
+            if attachments_dir.exists():
+                for file_path in attachments_dir.iterdir():
+                    if file_path.is_file():
+                        file_stat = file_path.stat()
+                        file_ext = file_path.suffix.lower()
+
+                        # Parse: {timestamp}-{task_id}-{original_name}
+                        # Fixed: split only into 3 parts to preserve dashes in filename
+                        parts = file_path.name.split('-', 2)
+                        if len(parts) >= 3:
+                            original_name = parts[2]
+                        else:
+                            original_name = file_path.name
+
+                        attachments.append({
+                            'id': file_path.name,
+                            'filename': file_path.name,
+                            'original_name': original_name,
+                            'url': f"/api/projects/{project_id}/attachments/{task_id}/{file_path.name}",
+                            'size': file_stat.st_size,
+                            'type': file_ext,
+                            'uploaded_at': datetime.fromtimestamp(file_stat.st_mtime).isoformat()
+                        })
+
+            # Sort by upload date (newest first)
+            attachments.sort(key=lambda x: x['uploaded_at'], reverse=True)
+
+            return {
+                'success': True,
+                'attachments': attachments,
+                'count': len(attachments)
+            }, 200
+
+        except Exception as e:
+            print(f"Error getting attachments: {e}")
+            import traceback
+            traceback.print_exc()
+            return {'success': False, 'error': str(e)}, 500
+
+    def delete_task_attachment(self, project_id, task_id, filename):
+        """Delete a specific attachment"""
+        try:
+            project_path = Path(PROJECTS_BASE_DIR) / project_id
+            if not project_path.exists():
+                return {'success': False, 'error': 'Project not found'}, 404
+
+            # Delete attachment file
+            attachment_path = project_path / 'attachments' / task_id / filename
+            file_existed = False
+
+            if attachment_path.exists():
+                attachment_path.unlink()
+                file_existed = True
+                print(f"🗑️ Deleted attachment file: {attachment_path}")
+            else:
+                print(f"⚠️ Attachment file not found, will clean metadata: {attachment_path}")
+
+            # Update metadata.json - remove attachment from list (even if file didn't exist)
+            metadata_file = project_path / 'attachments' / 'metadata.json'
+            metadata_updated = False
+
+            if metadata_file.exists():
+                with open(metadata_file, 'r', encoding='utf-8') as f:
+                    metadata = json.load(f)
+
+                if task_id in metadata and 'attachments' in metadata[task_id]:
+                    original_count = len(metadata[task_id]['attachments'])
+                    # Remove attachment with matching filename
+                    metadata[task_id]['attachments'] = [
+                        att for att in metadata[task_id]['attachments']
+                        if att.get('filename') != filename
+                    ]
+
+                    if len(metadata[task_id]['attachments']) < original_count:
+                        metadata_updated = True
+                        # Save updated metadata
+                        with open(metadata_file, 'w', encoding='utf-8') as f:
+                            json.dump(metadata, f, indent=2, ensure_ascii=False)
+                        print(f"🗑️ Removed attachment from metadata: {filename}")
+
+            # Return success if either file was deleted or metadata was updated
+            if file_existed or metadata_updated:
+                return {'success': True, 'message': 'Attachment deleted'}, 200
+            else:
+                return {'success': False, 'error': 'Attachment not found'}, 404
+
+        except Exception as e:
+            print(f"Error deleting attachment: {e}")
+            return {'success': False, 'error': str(e)}, 500
+
+    def update_attachment_metadata(self, project_path, task_id, attachment_data):
+        """Update attachments metadata.json"""
+        try:
+            metadata_file = project_path / 'attachments' / 'metadata.json'
+            metadata_file.parent.mkdir(exist_ok=True)
+
+            # Load existing metadata
+            if metadata_file.exists():
+                with open(metadata_file, 'r', encoding='utf-8') as f:
+                    metadata = json.load(f)
+            else:
+                metadata = {}
+
+            # Add attachment to task's attachments list
+            if task_id not in metadata:
+                metadata[task_id] = {'attachments': []}
+
+            metadata[task_id]['attachments'].append(attachment_data)
+
+            # Save metadata
+            with open(metadata_file, 'w', encoding='utf-8') as f:
+                json.dump(metadata, f, indent=2, ensure_ascii=False)
+
+        except Exception as e:
+            print(f"Error updating attachment metadata: {e}")
 
     def send_json_response(self, data, status_code=200):
         self.send_response(status_code)
