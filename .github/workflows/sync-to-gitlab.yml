@@ -15,5 +15,5 @@ jobs:
         run: |
           git config user.name "denys.kramar"
           git config user.email "denys.kramar@onix-systems.com"
-          git remote add gitlab https://oauth2:${{ secrets.GITLAB_TOKEN }}@gitlab.com/Onix-Systems/android-tasks.git
+          git remote add gitlab https://oauth2:${{ secrets.GITLAB_TOKEN }}@gitlab.onix.team/Onix-Systems/android-tasks.git
           git push gitlab main
