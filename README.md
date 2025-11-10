@@ -3,8 +3,8 @@
 
 <div align="center">
   
-[![Landing Site](https://img.shields.io/badge/Website-Landing%20Page-blue?logo=web)](https://onix-systems-android-tasks.dev.onix.team/landing/index.html)
-[![YouTube](https://img.shields.io/badge/YouTube-Video-FF0000?logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=OsAko7621MM)
+[![Landing Site](https://img.shields.io/badge/Website-Landing%20Page-blue?logo=web)](https://fira.onix.team/)
+[![YouTube](https://img.shields.io/badge/YouTube-Video-FF0000?logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=N1KwVzM5_a0&list=PL7jtGk-EYqR-0g8AxyGMkKuBjbb_MdBSA)
 [![Wiki](https://img.shields.io/badge/Wiki-GitHub%20Wiki-green?logo=tools)](https://github.com/Onix-Systems/Fira/wiki)
 [![Docker](https://img.shields.io/badge/Docker-Container-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/repository/docker/krdendev/fira/tags/latest/sha256-c726114406e61342a46cf17b638b0973769c6acc68afe50cf0af9ef5ea9fd615)
 [![Releases](https://img.shields.io/badge/GitHub-Releases-orange?logo=github)](https://github.com/Onix-Systems/Fira/releases)
