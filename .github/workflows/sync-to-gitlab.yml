@@ -54,10 +54,75 @@ jobs:
 
       - name: Test GitLab API access and create repo if needed
         run: |
-          echo "Testing GitLab API access..."
+          echo "=========================================="
+          echo "DETAILED DIAGNOSTICS"
+          echo "=========================================="
+
+          # Check token format and length
+          TOKEN_LENGTH=$(echo -n "${{ secrets.GITLAB_TOKEN }}" | wc -c)
+          TOKEN_PREFIX=$(echo "${{ secrets.GITLAB_TOKEN }}" | cut -c1-7)
+          echo "Token length: $TOKEN_LENGTH characters"
+          echo "Token starts with: ${TOKEN_PREFIX}..."
+
+          # Check GITLAB_REPO format
+          echo "GITLAB_REPO value: '${{ secrets.GITLAB_REPO }}'"
+          REPO_LENGTH=$(echo -n "${{ secrets.GITLAB_REPO }}" | wc -c)
+          echo "GITLAB_REPO length: $REPO_LENGTH characters"
+
+          # Check for spaces or special characters
+          if [[ "${{ secrets.GITLAB_REPO }}" =~ [[:space:]] ]]; then
+            echo "⚠️ WARNING: GITLAB_REPO contains spaces!"
+          fi
+
+          if [[ "${{ secrets.GITLAB_REPO }}" == http* ]]; then
+            echo "❌ ERROR: GITLAB_REPO should not contain URL (http/https)"
+            echo "Format should be: username/repo-name"
+            exit 1
+          fi
+
+          # Test 1: Check if token can authenticate at all
+          echo ""
+          echo "=========================================="
+          echo "TEST 1: Testing token authentication..."
+          echo "=========================================="
+
+          USER_RESPONSE=$(curl -s -w "\n%{http_code}" \
+            --header "PRIVATE-TOKEN: ${{ secrets.GITLAB_TOKEN }}" \
+            "https://gitlab.com/api/v4/user")
+
+          USER_HTTP_CODE=$(echo "$USER_RESPONSE" | tail -n1)
+          USER_BODY=$(echo "$USER_RESPONSE" | head -n-1)
+
+          echo "Response Code: $USER_HTTP_CODE"
+
+          if [ "$USER_HTTP_CODE" = "200" ]; then
+            echo "✅ Token is VALID and can authenticate!"
+            USERNAME=$(echo "$USER_BODY" | grep -o '"username":"[^"]*"' | cut -d'"' -f4)
+            echo "Authenticated as: $USERNAME"
+          else
+            echo "❌ Token CANNOT authenticate (401)"
+            echo "This means the token itself is invalid or expired."
+            echo "Response body:"
+            echo "$USER_BODY"
+            echo ""
+            echo "ACTION REQUIRED:"
+            echo "1. Go to https://gitlab.com/-/profile/personal_access_tokens"
+            echo "2. Check if your token is still active (not expired/revoked)"
+            echo "3. Create a NEW token with scopes: api, read_repository, write_repository"
+            echo "4. Copy the ENTIRE token (usually 20-26 characters)"
+            echo "5. Update GITLAB_TOKEN in GitHub: Settings → Secrets → Actions"
+            exit 1
+          fi
+
+          # Test 2: Check repository access
+          echo ""
+          echo "=========================================="
+          echo "TEST 2: Testing repository access..."
+          echo "=========================================="
 
           # URL encode the repository path
           ENCODED_REPO=$(echo "${{ secrets.GITLAB_REPO }}" | sed 's/\//%2F/g')
+          echo "Encoded repo path: $ENCODED_REPO"
 
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
             --header "PRIVATE-TOKEN: ${{ secrets.GITLAB_TOKEN }}" \
