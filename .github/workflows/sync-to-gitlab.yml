@@ -52,17 +52,21 @@ jobs:
             echo "⚠️ Warning: Token doesn't start with glpat- or gldt-. This might be an old token format."
           fi
 
-      - name: Test GitLab API access
+      - name: Test GitLab API access and create repo if needed
         run: |
           echo "Testing GitLab API access..."
+
+          # URL encode the repository path
+          ENCODED_REPO=$(echo "${{ secrets.GITLAB_REPO }}" | sed 's/\//%2F/g')
+
           RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
             --header "PRIVATE-TOKEN: ${{ secrets.GITLAB_TOKEN }}" \
-            "https://gitlab.com/api/v4/projects/${{ secrets.GITLAB_REPO }}" | sed 's/%2F/\//g')
+            "https://gitlab.com/api/v4/projects/${ENCODED_REPO}")
 
           echo "API Response Code: $RESPONSE"
 
           if [ "$RESPONSE" = "200" ]; then
-            echo "✅ Successfully accessed GitLab repository via API"
+            echo "✅ Repository exists and is accessible"
           elif [ "$RESPONSE" = "401" ]; then
             echo "❌ ERROR: Token authentication failed (401 Unauthorized)"
             echo "Possible issues:"
@@ -70,13 +74,64 @@ jobs:
             echo "  - Token doesn't have 'api' or 'read_api' scope"
             exit 1
           elif [ "$RESPONSE" = "404" ]; then
-            echo "❌ ERROR: Repository not found (404)"
+            echo "❌ ERROR: Repository not found or no access (404)"
             echo "Repository path: ${{ secrets.GITLAB_REPO }}"
-            echo "Please check:"
-            echo "  - Repository exists on GitLab"
-            echo "  - Repository path format is: 'username/repo-name' (not URL)"
-            echo "  - Token has access to this repository"
-            exit 1
+            echo ""
+            echo "This could mean:"
+            echo "  1. Repository doesn't exist on GitLab"
+            echo "  2. Repository is private and token doesn't have 'api' scope"
+            echo "  3. Token doesn't have access to this repository"
+            echo ""
+            echo "If repository exists and is PRIVATE:"
+            echo "  → Your token MUST have 'api' scope to access private repos"
+            echo "  → Go to GitLab → Settings → Access Tokens"
+            echo "  → Create new token with scopes: api, write_repository, read_repository"
+            echo "  → Update GITLAB_TOKEN secret in GitHub"
+            echo ""
+            echo "If repository doesn't exist, attempting to create it..."
+
+            # Extract username and repo name
+            IFS='/' read -r NAMESPACE REPO_NAME <<< "${{ secrets.GITLAB_REPO }}"
+
+            # Create repository
+            CREATE_RESPONSE=$(curl -s -w "\n%{http_code}" \
+              --header "PRIVATE-TOKEN: ${{ secrets.GITLAB_TOKEN }}" \
+              --header "Content-Type: application/json" \
+              --data "{
+                \"name\": \"${REPO_NAME}\",
+                \"path\": \"${REPO_NAME}\",
+                \"visibility\": \"private\",
+                \"initialize_with_readme\": false
+              }" \
+              "https://gitlab.com/api/v4/projects")
+
+            HTTP_CODE=$(echo "$CREATE_RESPONSE" | tail -n1)
+            RESPONSE_BODY=$(echo "$CREATE_RESPONSE" | head -n-1)
+
+            if [ "$HTTP_CODE" = "201" ]; then
+              echo "✅ Successfully created repository on GitLab!"
+              echo "Repository URL: https://gitlab.com/${{ secrets.GITLAB_REPO }}"
+            elif [ "$HTTP_CODE" = "401" ]; then
+              echo "❌ Token doesn't have permission to create repositories"
+              echo "Token needs 'api' scope to create projects"
+              exit 1
+            else
+              echo "❌ Failed to create repository (likely it already exists but token can't access it)"
+              echo "HTTP Code: $HTTP_CODE"
+              echo ""
+              echo "ACTION REQUIRED:"
+              echo "Your GitLab token needs 'api' scope to access private repositories!"
+              echo ""
+              echo "Steps to fix:"
+              echo "1. Go to https://gitlab.com/-/profile/personal_access_tokens"
+              echo "2. Create a new token with these scopes:"
+              echo "   - api ✓"
+              echo "   - write_repository ✓"
+              echo "   - read_repository ✓"
+              echo "3. Copy the token"
+              echo "4. Update GITLAB_TOKEN secret in GitHub repository settings"
+              exit 1
+            fi
           else
             echo "⚠️ Unexpected response code: $RESPONSE"
             echo "Continuing anyway..."
