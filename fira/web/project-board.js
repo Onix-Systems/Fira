@@ -283,6 +283,9 @@ class ProjectBoard {
         this.filterAndRenderTasks();
         this.initializeViewSwitchButton();
 
+        // Initialize Project Links Manager
+        this.initializeProjectLinksManager();
+
         // Setup UI permissions after everything is loaded
         // Note: setupUIPermissions() now handles setupDropZones() internally
         this.setupUIPermissions();
@@ -300,6 +303,34 @@ class ProjectBoard {
                 }
             }, 250);
         });
+    }
+
+    initializeProjectLinksManager() {
+        // Initialize Project Links Manager
+        console.log('🔗 initializeProjectLinksManager called');
+        console.log('  - this.currentProject:', this.currentProject?.id);
+        console.log('  - ProjectLinksManager class:', typeof ProjectLinksManager);
+        console.log('  - window.firaAPIClient:', window.firaAPIClient);
+        console.log('  - window.apiClient:', window.apiClient);
+
+        if (this.currentProject && typeof ProjectLinksManager !== 'undefined') {
+            const apiClient = window.firaAPIClient || window.apiClient;
+            console.log('  - Selected apiClient:', apiClient);
+            console.log('  - apiClient.baseUrl:', apiClient?.baseUrl);
+
+            if (apiClient) {
+                window.projectLinksManager = new ProjectLinksManager(apiClient, this.currentProject.id);
+                console.log('✅ ProjectLinksManager initialized with project:', this.currentProject.id);
+                console.log('  - projectLinksManager.apiClient:', window.projectLinksManager.apiClient);
+                console.log('  - projectLinksManager.apiClient.baseUrl:', window.projectLinksManager.apiClient?.baseUrl);
+            } else {
+                console.warn('⚠️ API client not available for ProjectLinksManager');
+            }
+        } else {
+            console.warn('⚠️ ProjectLinksManager class not loaded or no current project');
+            console.log('  - currentProject:', this.currentProject);
+            console.log('  - ProjectLinksManager defined:', typeof ProjectLinksManager !== 'undefined');
+        }
     }
 
     checkAndOpenTaskFromUrl() {
@@ -6721,7 +6752,7 @@ function initializeBoard() {
         board = new ProjectBoard();
         window.projectBoard = board; // Ensure it's globally available
     }
-    
+
     // Setup drop zones after a small delay to ensure DOM is ready
     // Note: setupDropZones() is now handled by setupUIPermissions()
     // setTimeout(() => {
@@ -6788,12 +6819,15 @@ window.initProjectBoard = async function(projectName, taskName = null) {
         // Load tasks for the new project before filtering and rendering
         await board.loadProjectTasks();
         board.filterAndRenderTasks();
-        
+
+        // Initialize Project Links Manager
+        board.initializeProjectLinksManager();
+
         // Setup drop zones
         // Note: setupDropZones() is now handled by setupUIPermissions()
         // setTimeout(() => {
         //     board.setupDropZones();
-        //     
+        //
         //     // If task name is provided, try to open that task
         //     if (taskName) {
         //         setTimeout(() => {
@@ -6801,7 +6835,7 @@ window.initProjectBoard = async function(projectName, taskName = null) {
         //         }, 200);
         //     }
         // }, 100);
-        
+
         // If task name is provided, try to open that task
         if (taskName) {
             setTimeout(() => {

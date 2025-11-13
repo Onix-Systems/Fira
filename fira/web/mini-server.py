@@ -704,6 +704,224 @@ class ProjectManager:
             print(f"Error updating project {project_id}: {e}")
             return False
 
+    def get_project_links(self, project_id):
+        """Get all links for a project"""
+        project_path = self.base_dir / project_id
+        links_path = project_path / 'links'
+        links_file = links_path / 'links.json'
+
+        if not links_file.exists():
+            return []
+
+        try:
+            with open(links_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return data.get('links', [])
+        except Exception as e:
+            print(f"Error loading links for project {project_id}: {e}")
+            return []
+
+    def save_project_links(self, project_id, links):
+        """Save links for a project"""
+        project_path = self.base_dir / project_id
+        links_path = project_path / 'links'
+        links_path.mkdir(exist_ok=True)
+
+        links_file = links_path / 'links.json'
+
+        try:
+            with open(links_file, 'w', encoding='utf-8') as f:
+                json.dump({'links': links}, f, indent=2, ensure_ascii=False)
+            return True
+        except Exception as e:
+            print(f"Error saving links for project {project_id}: {e}")
+            return False
+
+    def add_project_link(self, project_id, link_data):
+        """Add a new link to project"""
+        links = self.get_project_links(project_id)
+
+        # Generate unique ID
+        link_id = link_data.get('id') or f"link-{len(links) + 1}"
+
+        new_link = {
+            'id': link_id,
+            'title': link_data.get('title', ''),
+            'url': link_data.get('url', ''),
+            'description': link_data.get('description', ''),
+            'icon': link_data.get('icon', ''),
+            'created_at': datetime.now().isoformat()
+        }
+
+        links.append(new_link)
+        self.save_project_links(project_id, links)
+        return new_link
+
+    def update_project_link(self, project_id, link_id, link_data):
+        """Update an existing link"""
+        links = self.get_project_links(project_id)
+
+        for i, link in enumerate(links):
+            if link['id'] == link_id:
+                links[i].update({
+                    'title': link_data.get('title', link['title']),
+                    'url': link_data.get('url', link['url']),
+                    'description': link_data.get('description', link['description']),
+                    'icon': link_data.get('icon', link.get('icon', '')),
+                    'updated_at': datetime.now().isoformat()
+                })
+                self.save_project_links(project_id, links)
+                return links[i]
+
+        return None
+
+    def delete_project_link(self, project_id, link_id):
+        """Delete a link from project"""
+        links = self.get_project_links(project_id)
+        links = [link for link in links if link['id'] != link_id]
+        return self.save_project_links(project_id, links)
+
+    def save_link_icon(self, project_id, link_id, file_data, filename):
+        """Save custom icon for a link and update links.json"""
+        project_path = self.base_dir / project_id
+        icons_path = project_path / 'links' / 'icons'
+        icons_path.mkdir(parents=True, exist_ok=True)
+
+        # Create unique filename
+        file_ext = Path(filename).suffix
+        icon_filename = f"{link_id}{file_ext}"
+        icon_path = icons_path / icon_filename
+
+        try:
+            # Save icon file
+            with open(icon_path, 'wb') as f:
+                f.write(file_data)
+
+            icon_relative_path = f"icons/{icon_filename}"
+            print(f"✅ Icon file saved: {icon_relative_path}")
+
+            # Update link in links.json with icon path
+            links = self.get_project_links(project_id)
+            for link in links:
+                if link.get('id') == link_id:
+                    link['icon'] = icon_relative_path
+                    print(f"✅ Updated link {link_id} with icon path: {icon_relative_path}")
+                    break
+
+            # Save updated links
+            self.save_project_links(project_id, links)
+            print(f"✅ links.json updated for project {project_id}")
+
+            return icon_relative_path
+        except Exception as e:
+            print(f"❌ Error saving link icon: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+    def fetch_favicon(self, url):
+        """Fetch favicon from URL using multiple methods"""
+        try:
+            from urllib.parse import urlparse
+            import urllib.request
+            import ssl
+
+            # Parse URL
+            parsed = urlparse(url)
+            if not parsed.scheme:
+                url = f"https://{url}"
+                parsed = urlparse(url)
+
+            domain = f"{parsed.scheme}://{parsed.netloc}"
+
+            print(f"🔍 Fetching favicon for domain: {domain}")
+
+            # Create SSL context that doesn't verify certificates (for development)
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+
+            # Method 1: Try Google's favicon service first (most reliable)
+            google_favicon_urls = [
+                f"https://www.google.com/s2/favicons?domain={parsed.netloc}&sz=128",
+                f"https://www.google.com/s2/favicons?domain={parsed.netloc}&sz=64",
+                f"https://www.google.com/s2/favicons?domain={parsed.netloc}&sz=32",
+            ]
+
+            for google_url in google_favicon_urls:
+                try:
+                    print(f"  📡 Trying Google favicon service: {google_url}")
+                    req = urllib.request.Request(
+                        google_url,
+                        headers={
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                        }
+                    )
+                    with urllib.request.urlopen(req, timeout=5, context=ssl_context) as response:
+                        if response.status == 200:
+                            data = response.read()
+                            if len(data) > 100:  # Make sure it's not a placeholder
+                                print(f"  ✅ Got favicon from Google ({len(data)} bytes)")
+                                return data
+                except Exception as e:
+                    print(f"  ❌ Google favicon failed: {e}")
+                    continue
+
+            # Method 2: Try common favicon locations on the website
+            favicon_urls = [
+                f"{domain}/favicon.ico",
+                f"{domain}/favicon.png",
+                f"{domain}/apple-touch-icon.png",
+                f"{domain}/apple-touch-icon-precomposed.png",
+            ]
+
+            for favicon_url in favicon_urls:
+                try:
+                    print(f"  📡 Trying direct URL: {favicon_url}")
+                    req = urllib.request.Request(
+                        favicon_url,
+                        headers={
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                            'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+                            'Referer': domain
+                        }
+                    )
+                    with urllib.request.urlopen(req, timeout=5, context=ssl_context) as response:
+                        if response.status == 200:
+                            data = response.read()
+                            if len(data) > 100:
+                                print(f"  ✅ Got favicon from {favicon_url} ({len(data)} bytes)")
+                                return data
+                except Exception as e:
+                    print(f"  ❌ Direct URL failed: {e}")
+                    continue
+
+            # Method 3: Try DuckDuckGo's favicon service
+            try:
+                duckduckgo_url = f"https://icons.duckduckgo.com/ip3/{parsed.netloc}.ico"
+                print(f"  📡 Trying DuckDuckGo: {duckduckgo_url}")
+                req = urllib.request.Request(
+                    duckduckgo_url,
+                    headers={'User-Agent': 'Mozilla/5.0'}
+                )
+                with urllib.request.urlopen(req, timeout=5, context=ssl_context) as response:
+                    if response.status == 200:
+                        data = response.read()
+                        if len(data) > 100:
+                            print(f"  ✅ Got favicon from DuckDuckGo ({len(data)} bytes)")
+                            return data
+            except Exception as e:
+                print(f"  ❌ DuckDuckGo failed: {e}")
+
+            print(f"  ❌ All methods failed for {domain}")
+            return None
+
+        except Exception as e:
+            print(f"❌ Error fetching favicon: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
 class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         self.project_manager = ProjectManager(PROJECTS_BASE_DIR)
@@ -871,6 +1089,41 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                     'success': False,
                     'error': str(e)
                 }, 500)
+
+        # Delete link endpoint
+        # Expected format: /api/projects/{project_id}/links/{link_id}
+        elif (len(path_parts) == 5 and
+              path_parts[0] == 'api' and
+              path_parts[1] == 'projects' and
+              path_parts[3] == 'links'):
+
+            try:
+                project_id = unquote(path_parts[2])
+                link_id = unquote(path_parts[4])
+
+                print(f"🗑️ Attempting to delete link: {link_id} from project: {project_id}")
+
+                success = self.project_manager.delete_project_link(project_id, link_id)
+
+                if success:
+                    self.send_json_response({
+                        'success': True,
+                        'message': f'Link {link_id} deleted successfully'
+                    })
+                    print(f"✅ Link deleted: {link_id}")
+                else:
+                    self.send_json_response({
+                        'success': False,
+                        'error': 'Failed to delete link'
+                    }, 500)
+
+            except Exception as e:
+                print(f"Error deleting link: {e}")
+                self.send_json_response({
+                    'success': False,
+                    'error': str(e)
+                }, 500)
+
         else:
             self.send_response(404)
             self.end_headers()
@@ -1146,6 +1399,145 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                     'error': str(e)
                 }, 500)
                 return
+
+        # Check if it's a GET links list endpoint for project
+        # Expected format: /api/projects/{project_id}/links
+        if (len(path_parts) == 4 and
+            path_parts[0] == 'api' and
+            path_parts[1] == 'projects' and
+            path_parts[3] == 'links'):
+
+            try:
+                from urllib.parse import unquote
+                project_id = unquote(path_parts[2])
+                print(f"🔗 GET links request: project={project_id}")
+
+                links = self.project_manager.get_project_links(project_id)
+                self.send_json_response({
+                    'success': True,
+                    'links': links
+                })
+                print(f"🔗 Sent {len(links)} links for project {project_id}")
+                return
+
+            except Exception as e:
+                print(f"Error getting project links: {e}")
+                self.send_json_response({
+                    'success': False,
+                    'error': str(e)
+                }, 500)
+                return
+
+        # Check if it's a link icon serving endpoint
+        # Expected format: /api/projects/{project_id}/links/icons/{filename}
+        if (len(path_parts) == 6 and
+            path_parts[0] == 'api' and
+            path_parts[1] == 'projects' and
+            path_parts[3] == 'links' and
+            path_parts[4] == 'icons'):
+
+            try:
+                from urllib.parse import unquote
+                project_id = unquote(path_parts[2])
+                filename = unquote(path_parts[5])
+
+                project_path = Path(PROJECTS_BASE_DIR) / project_id
+                icon_path = project_path / 'links' / 'icons' / filename
+
+                if not icon_path.exists():
+                    self.send_error(404, 'Icon not found')
+                    return
+
+                # Serve the icon file
+                with open(icon_path, 'rb') as f:
+                    content = f.read()
+
+                # Determine content type from file extension
+                ext = icon_path.suffix.lower()
+                content_types = {
+                    '.png': 'image/png',
+                    '.jpg': 'image/jpeg',
+                    '.jpeg': 'image/jpeg',
+                    '.gif': 'image/gif',
+                    '.svg': 'image/svg+xml',
+                    '.ico': 'image/x-icon'
+                }
+                content_type = content_types.get(ext, 'application/octet-stream')
+
+                self.send_response(200)
+                self.send_header('Content-Type', content_type)
+                self.send_header('Content-Length', len(content))
+                self.end_headers()
+                self.wfile.write(content)
+                return
+
+            except Exception as e:
+                print(f"Error serving link icon: {e}")
+                self.send_error(500, str(e))
+                return
+
+        # Check if it's a fetch favicon endpoint
+        # Expected format: /api/fetch-favicon?url=...
+        if parsed_path.path == '/api/fetch-favicon':
+            try:
+                from urllib.parse import parse_qs
+                query_params = parse_qs(parsed_path.query)
+                url = query_params.get('url', [''])[0]
+
+                if not url:
+                    self.send_json_response({
+                        'success': False,
+                        'error': 'URL parameter is required'
+                    }, 400)
+                    return
+
+                print(f"🔍 Fetching favicon for: {url}")
+
+                favicon_data = self.project_manager.fetch_favicon(url)
+
+                if favicon_data:
+                    # Return favicon as base64
+                    import base64
+                    import imghdr
+
+                    favicon_base64 = base64.b64encode(favicon_data).decode('utf-8')
+
+                    # Detect image type
+                    image_type = imghdr.what(None, h=favicon_data)
+                    if image_type is None:
+                        # Default to png if can't detect
+                        image_type = 'png'
+
+                    # Map image types to MIME types
+                    mime_types = {
+                        'jpeg': 'image/jpeg',
+                        'jpg': 'image/jpeg',
+                        'png': 'image/png',
+                        'gif': 'image/gif',
+                        'ico': 'image/x-icon',
+                        'svg': 'image/svg+xml',
+                        'webp': 'image/webp'
+                    }
+                    mime_type = mime_types.get(image_type, 'image/png')
+
+                    self.send_json_response({
+                        'success': True,
+                        'favicon': f"data:{mime_type};base64,{favicon_base64}"
+                    })
+                    print(f"✅ Favicon fetched successfully (type: {image_type}, size: {len(favicon_data)} bytes)")
+                else:
+                    self.send_json_response({
+                        'success': False,
+                        'error': 'Could not fetch favicon'
+                    }, 404)
+
+            except Exception as e:
+                print(f"Error fetching favicon: {e}")
+                self.send_json_response({
+                    'success': False,
+                    'error': str(e)
+                }, 500)
+            return
 
         # Check if it's an image serving endpoint with thumbnails support
         # Expected format: /api/projects/{project_id}/images/{task_id}/{filename}
@@ -1582,6 +1974,56 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                     'error': str(e)
                 }, 500)
                 print(f"Error updating task: {e}")
+
+        # Check if it's a link update endpoint
+        # Expected format: /api/projects/{project_id}/links/{link_id}
+        elif (len(path_parts) == 5 and
+            path_parts[0] == 'api' and
+            path_parts[1] == 'projects' and
+            path_parts[3] == 'links'):
+
+            try:
+                from urllib.parse import unquote
+                project_id = unquote(path_parts[2])
+                link_id = unquote(path_parts[4])
+
+                print(f"🔗 Update link request: {link_id} in project {project_id}")
+
+                # Read request body
+                content_length = int(self.headers.get('Content-Length', 0))
+                if content_length > 0:
+                    body = self.rfile.read(content_length)
+                    link_data = json.loads(body.decode('utf-8'))
+
+                    updated_link = self.project_manager.update_project_link(
+                        project_id, link_id, link_data
+                    )
+
+                    if updated_link:
+                        self.send_json_response({
+                            'success': True,
+                            'message': 'Link updated successfully',
+                            'link': updated_link
+                        })
+                        print(f"✅ Link updated: {link_id}")
+                    else:
+                        self.send_json_response({
+                            'success': False,
+                            'error': 'Link not found'
+                        }, 404)
+                else:
+                    self.send_json_response({
+                        'success': False,
+                        'error': 'No request body'
+                    }, 400)
+
+            except Exception as e:
+                print(f"Error updating link: {e}")
+                self.send_json_response({
+                    'success': False,
+                    'error': str(e)
+                }, 500)
+
         else:
             # Not a task update endpoint
             self.send_response(404)
@@ -2398,6 +2840,128 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                 print(f"Error unblocking task: {e}")
                 import traceback
                 traceback.print_exc()
+                self.send_json_response({
+                    'success': False,
+                    'error': str(e)
+                }, 500)
+            return
+
+        # Add link endpoint
+        # Expected format: /api/projects/{project_id}/links
+        elif (len(path_parts) == 4 and
+              path_parts[0] == 'api' and
+              path_parts[1] == 'projects' and
+              path_parts[3] == 'links'):
+
+            try:
+                from urllib.parse import unquote
+                project_id = unquote(path_parts[2])
+
+                print(f"🔗 Add link request for project: {project_id}")
+
+                # Read request body
+                content_length = int(self.headers.get('Content-Length', 0))
+                if content_length > 0:
+                    body = self.rfile.read(content_length)
+                    link_data = json.loads(body.decode('utf-8'))
+
+                    new_link = self.project_manager.add_project_link(project_id, link_data)
+
+                    if new_link:
+                        self.send_json_response({
+                            'success': True,
+                            'message': 'Link added successfully',
+                            'link': new_link
+                        })
+                        print(f"✅ Link added: {new_link['title']}")
+                    else:
+                        self.send_json_response({
+                            'success': False,
+                            'error': 'Failed to add link'
+                        }, 500)
+                else:
+                    self.send_json_response({
+                        'success': False,
+                        'error': 'No request body'
+                    }, 400)
+
+            except Exception as e:
+                print(f"Error adding link: {e}")
+                self.send_json_response({
+                    'success': False,
+                    'error': str(e)
+                }, 500)
+            return
+
+        # Upload link icon endpoint
+        # Expected format: /api/projects/{project_id}/links/{link_id}/icon
+        elif (len(path_parts) == 6 and
+              path_parts[0] == 'api' and
+              path_parts[1] == 'projects' and
+              path_parts[3] == 'links' and
+              path_parts[5] == 'icon'):
+
+            try:
+                from urllib.parse import unquote
+                project_id = unquote(path_parts[2])
+                link_id = unquote(path_parts[4])
+
+                print(f"🖼️ Upload icon for link: {link_id} in project {project_id}")
+
+                # Handle multipart form data
+                content_type = self.headers.get('Content-Type', '')
+                if 'multipart/form-data' not in content_type:
+                    self.send_json_response({
+                        'success': False,
+                        'error': 'Content-Type must be multipart/form-data'
+                    }, 400)
+                    return
+
+                # Parse multipart form data
+                boundary = content_type.split('boundary=')[1].encode()
+                content_length = int(self.headers.get('Content-Length', 0))
+                body = self.rfile.read(content_length)
+
+                # Simple multipart parser
+                parts = body.split(b'--' + boundary)
+                for part in parts:
+                    if b'Content-Disposition' in part:
+                        # Extract filename
+                        if b'filename=' in part:
+                            filename_start = part.find(b'filename="') + 10
+                            filename_end = part.find(b'"', filename_start)
+                            filename = part[filename_start:filename_end].decode('utf-8')
+
+                            # Extract file data
+                            file_data_start = part.find(b'\r\n\r\n') + 4
+                            file_data = part[file_data_start:-2]  # Remove trailing \r\n
+
+                            # Save icon
+                            icon_path = self.project_manager.save_link_icon(
+                                project_id, link_id, file_data, filename
+                            )
+
+                            if icon_path:
+                                self.send_json_response({
+                                    'success': True,
+                                    'message': 'Icon uploaded successfully',
+                                    'icon_path': icon_path
+                                })
+                                print(f"✅ Icon uploaded: {icon_path}")
+                            else:
+                                self.send_json_response({
+                                    'success': False,
+                                    'error': 'Failed to save icon'
+                                }, 500)
+                            return
+
+                self.send_json_response({
+                    'success': False,
+                    'error': 'No file found in request'
+                }, 400)
+
+            except Exception as e:
+                print(f"Error uploading link icon: {e}")
                 self.send_json_response({
                     'success': False,
                     'error': str(e)

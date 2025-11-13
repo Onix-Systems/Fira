@@ -195,9 +195,14 @@
     color: #2d3748;
 }
 
-.attachment-action-btn.download-btn:hover {
+.attachment-action-btn.view-btn:hover {
     color: #8b5cf6;
     background: #faf5ff;
+}
+
+.attachment-action-btn.download-btn:hover {
+    color: #3182ce;
+    background: #ebf8ff;
 }
 
 .attachment-action-btn.delete-btn:hover {

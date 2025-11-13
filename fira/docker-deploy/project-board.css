@@ -4802,3 +4802,34 @@ body.modal-open {
         margin-right: 0;
     }
 }
+
+/* Resizable Image Styles */
+.resizable-image-wrapper {
+    display: inline-block;
+    position: relative;
+    margin: 8px 0;
+}
+
+.resizable-image {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    cursor: nwse-resize;
+}
+
+.resizable-image[data-width] {
+    max-width: none;
+}
+
+.resize-handle {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 12px;
+    height: 12px;
+    background: #8b5cf6;
+    border-radius: 50%;
+    cursor: nwse-resize;
+    display: none;
+}

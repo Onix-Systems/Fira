@@ -506,6 +506,7 @@ body {
     padding: 10px 20px;
     cursor: pointer;
     transition: background 0.2s ease;
+    margin-bottom: 10px;
 }
 
 .modal-content button:hover {

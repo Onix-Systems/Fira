@@ -61,7 +61,7 @@ class AttachmentsManager {
                             <line x1="12" y1="3" x2="12" y2="15"></line>
                         </svg>
                         <p class="upload-text">Drop files here or click to select</p>
-                        <p class="upload-hint">Max 25MB per file • No .exe, .bat, .sh files</p>
+                        <p class="upload-hint">Max 250MB per file • Images and videos supported • No .exe, .bat, .sh files</p>
                     </div>
                     <input type="file" id="attachmentFileInput" style="display: none;" multiple>
                 </div>
@@ -85,6 +85,57 @@ class AttachmentsManager {
     }
 
     /**
+     * Check if file is media (image or video)
+     */
+    isMediaFile(filename) {
+        const ext = '.' + filename.split('.').pop().toLowerCase();
+        const mediaFormats = [
+            '.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp', '.bmp',
+            '.mp4', '.mov', '.avi', '.webm', '.mkv', '.flv'
+        ];
+        return mediaFormats.includes(ext);
+    }
+
+    /**
+     * Check if file is video
+     */
+    isVideoFile(filename) {
+        const ext = '.' + filename.split('.').pop().toLowerCase();
+        const videoFormats = ['.mp4', '.mov', '.avi', '.webm', '.mkv', '.flv'];
+        return videoFormats.includes(ext);
+    }
+
+    /**
+     * Check if file is text-based
+     */
+    isTextFile(filename) {
+        const ext = '.' + filename.split('.').pop().toLowerCase();
+        const textExtensions = [
+            // Documents
+            '.txt', '.md', '.markdown', '.rtf',
+
+            // Code files
+            '.js', '.jsx', '.ts', '.tsx',
+            '.py', '.java', '.kt', '.swift',
+            '.cpp', '.c', '.h', '.hpp',
+            '.cs', '.go', '.rs', '.rb',
+            '.php', '.html', '.htm', '.css', '.scss', '.sass',
+            '.json', '.xml', '.yaml', '.yml',
+            '.sh', '.bash', '.zsh',
+            '.sql', '.graphql',
+
+            // Config files
+            '.env', '.gitignore', '.dockerignore',
+            '.properties', '.conf', '.config', '.ini',
+
+            // Data files
+            '.csv', '.tsv', '.log'
+        ];
+
+        return textExtensions.includes(ext);
+    }
+
+    /**
      * Render list of attachments
      */
     renderAttachmentsList() {
@@ -92,43 +143,70 @@ class AttachmentsManager {
             return '<p class="no-attachments">No attachments yet</p>';
         }
 
-        return this.attachments.map(attachment => `
-            <div class="attachment-item" data-id="${attachment.id}">
-                <div class="attachment-icon">
-                    ${this.getFileIcon(attachment.type)}
-                </div>
-                <div class="attachment-info">
-                    <div class="attachment-name" title="${attachment.original_name}">
-                        ${this.truncateFilename(attachment.original_name, 30)}
+        return this.attachments.map((attachment, index) => {
+            const isMedia = this.isMediaFile(attachment.original_name);
+            const isVideo = this.isVideoFile(attachment.original_name);
+            const isText = this.isTextFile(attachment.original_name);
+
+            return `
+                <div class="attachment-item" data-id="${attachment.id}" data-index="${index}">
+                    <div class="attachment-icon">
+                        ${this.getFileIcon(attachment.type)}
                     </div>
-                    <div class="attachment-meta">
-                        <span class="attachment-size">${this.formatFileSize(attachment.size)}</span>
-                        <span class="attachment-separator">•</span>
-                        <span class="attachment-date">${this.formatDate(attachment.uploaded_at)}</span>
+                    <div class="attachment-info">
+                        <div class="attachment-name" title="${attachment.original_name}">
+                            ${this.truncateFilename(attachment.original_name, 30)}
+                        </div>
+                        <div class="attachment-meta">
+                            <span class="attachment-size">${this.formatFileSize(attachment.size)}</span>
+                            <span class="attachment-separator">•</span>
+                            <span class="attachment-date">${this.formatDate(attachment.uploaded_at)}</span>
+                        </div>
+                    </div>
+                    <div class="attachment-actions">
+                        ${isMedia ? `
+                            <button class="attachment-action-btn view-btn"
+                                    data-index="${index}"
+                                    title="${isVideo ? 'Play video' : 'View image'}">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    ${isVideo ?
+                                        '<polygon points="5 3 19 12 5 21 5 3"></polygon>' :
+                                        '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>'
+                                    }
+                                </svg>
+                            </button>
+                        ` : isText ? `
+                            <button class="attachment-action-btn view-text-btn"
+                                    data-index="${index}"
+                                    title="View text file">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                            </button>
+                        ` : ''}
+                        <button class="attachment-action-btn download-btn"
+                                data-url="${attachment.url}"
+                                data-filename="${attachment.original_name}"
+                                title="Download">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                        </button>
+                        <button class="attachment-action-btn delete-btn"
+                                data-filename="${attachment.filename}"
+                                title="Delete">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                        </button>
                     </div>
                 </div>
-                <div class="attachment-actions">
-                    <button class="attachment-action-btn download-btn"
-                            data-url="${attachment.url}"
-                            data-filename="${attachment.original_name}"
-                            title="Download">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                            <polyline points="7 10 12 15 17 10"></polyline>
-                            <line x1="12" y1="15" x2="12" y2="3"></line>
-                        </svg>
-                    </button>
-                    <button class="attachment-action-btn delete-btn"
-                            data-filename="${attachment.filename}"
-                            title="Delete">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="3 6 5 6 21 6"></polyline>
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                        </svg>
-                    </button>
-                </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
     }
 
     /**
@@ -186,8 +264,29 @@ class AttachmentsManager {
             }
         });
 
-        // Download buttons
+        // Attachment action buttons
         this.container.addEventListener('click', (e) => {
+            // View/Play button (media)
+            const viewBtn = e.target.closest('.view-btn');
+            if (viewBtn) {
+                e.stopPropagation();
+                e.preventDefault();
+                const index = parseInt(viewBtn.dataset.index);
+                this.viewAttachment(index);
+                return;
+            }
+
+            // View text file button
+            const viewTextBtn = e.target.closest('.view-text-btn');
+            if (viewTextBtn) {
+                e.stopPropagation();
+                e.preventDefault();
+                const index = parseInt(viewTextBtn.dataset.index);
+                this.viewTextFile(index);
+                return;
+            }
+
+            // Download button
             const downloadBtn = e.target.closest('.download-btn');
             if (downloadBtn) {
                 e.stopPropagation();
@@ -198,7 +297,7 @@ class AttachmentsManager {
                 return;
             }
 
-            // Delete buttons
+            // Delete button
             const deleteBtn = e.target.closest('.delete-btn');
             if (deleteBtn) {
                 e.stopPropagation();
@@ -225,7 +324,7 @@ class AttachmentsManager {
 
         // Validate files
         const blockedExtensions = ['.exe', '.bat', '.sh', '.app', '.dll', '.so', '.dylib'];
-        const maxSize = 25 * 1024 * 1024; // 25MB
+        const maxSize = 250 * 1024 * 1024; // 250MB
 
         for (const file of files) {
             const ext = '.' + file.name.split('.').pop().toLowerCase();
@@ -236,7 +335,7 @@ class AttachmentsManager {
             }
 
             if (file.size > maxSize) {
-                alert(`File ${file.name} exceeds 25MB limit`);
+                alert(`File ${file.name} exceeds 250MB limit`);
                 return;
             }
         }
@@ -277,6 +376,79 @@ class AttachmentsManager {
             this.uploadInProgress = false;
             this.showProgress(false);
         }
+    }
+
+    /**
+     * View attachment (image/video) in fullscreen
+     */
+    viewAttachment(index) {
+        console.log('👁️ Opening media viewer for attachment:', index);
+
+        // Check if ImageGallery is available
+        if (!window.imageGallery) {
+            console.error('❌ ImageGallery not initialized');
+            alert('Media viewer is not available');
+            return;
+        }
+
+        // Filter only media attachments and find the index
+        const mediaAttachments = this.attachments
+            .map((att, idx) => ({ ...att, originalIndex: idx }))
+            .filter(att => this.isMediaFile(att.original_name));
+
+        if (mediaAttachments.length === 0) {
+            console.error('❌ No media attachments found');
+            return;
+        }
+
+        // Find the media index relative to all media items
+        const attachment = this.attachments[index];
+        const mediaIndex = mediaAttachments.findIndex(att => att.originalIndex === index);
+
+        if (mediaIndex === -1) {
+            console.error('❌ Attachment not found in media list');
+            return;
+        }
+
+        // Format attachments for ImageGallery
+        const formattedMedia = mediaAttachments.map(att => ({
+            url: att.url,
+            thumbnail_url: att.url,
+            filename: att.filename,
+            original_name: att.original_name,
+            description: att.original_name
+        }));
+
+        // Replace ImageGallery images with attachments and open lightbox
+        window.imageGallery.images = formattedMedia;
+        window.imageGallery.openLightbox(mediaIndex);
+
+        console.log(`✅ Opened media viewer: ${attachment.original_name}`);
+    }
+
+    /**
+     * View text file in fullscreen viewer
+     */
+    viewTextFile(index) {
+        console.log('📄 Opening text viewer for attachment:', index);
+
+        // Check if TextFileViewer is available
+        if (!window.textFileViewer) {
+            console.error('❌ TextFileViewer not initialized');
+            alert('Text viewer is not available');
+            return;
+        }
+
+        const attachment = this.attachments[index];
+        if (!attachment) {
+            console.error('❌ Attachment not found at index:', index);
+            return;
+        }
+
+        // Open text viewer
+        window.textFileViewer.open(attachment.url, attachment.original_name);
+
+        console.log(`✅ Opened text viewer: ${attachment.original_name}`);
     }
 
     /**
@@ -408,6 +580,9 @@ class AttachmentsManager {
             '.mp4': '🎬',
             '.mov': '🎬',
             '.avi': '🎬',
+            '.webm': '🎬',
+            '.mkv': '🎬',
+            '.flv': '🎬',
 
             // Audio
             '.mp3': '🎵',

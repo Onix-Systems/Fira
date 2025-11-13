@@ -15,7 +15,10 @@
     <link rel="stylesheet" href="../cfd-chart.css?v=20251030">
     <link rel="stylesheet" href="../image-gallery.css?v=20251030">
     <link rel="stylesheet" href="../attachments-list.css?v=20251030">
-    <script src="../projects-data.js?v=20251030"></script>
+    <link rel="stylesheet" href="../text-viewer.css?v=20251030">
+    <link rel="stylesheet" href="../footer.css?v=20251030">
+    <link rel="stylesheet" href="../project-links.css?v=1762933768">
+    <script src="../projects-data.js?v=20251030">
     <script src="../file-system.js?v=20251030"></script>
     <script src="../api-client.js?v=20251030"></script>
     <script src="../global-data.js?v=20251030"></script>
@@ -24,7 +27,10 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="../cfd-chart.js?v=20251030"></script>
     <script src="../image-gallery.js?v=20251030"></script>
+    <script src="../text-viewer.js?v=20251030"></script>
     <script src="../attachments-list.js?v=20251030"></script>
+    <script src="../footer.js?v=20251030"></script>
+    <script src="../project-links-manager.js?v=1762933520"></script>
 </head>
 <body>
     <div class="project-board">
@@ -55,6 +61,12 @@
                                 <path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/>
                             </svg>
                             Workflow
+                        </button>
+                        <button class="toggle-btn links-btn" id="projectLinksBtn" title="Useful Project Links">
+                            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clip-rule="evenodd"/>
+                            </svg>
+                            Links
                         </button>
                         <button class="toggle-btn view-switch-btn active" id="viewSwitchBtn">List View</button>
                     </div>
@@ -1157,7 +1169,7 @@
     </div>
 
 
-    <script src="../project-board.js?v=3.0CHARTFIX"></script>
+    <script src="../project-board.js?v=1762930346220"></script>
     
     <script>
         // Простий спосіб додати кнопку через JavaScript
@@ -1334,19 +1346,138 @@ Technical Requirements: [if any]</textarea>
         </div>
     </div>
 
+    <!-- Project Links Modal -->
+    <div class="modal" id="projectLinksModal" style="display: none;">
+        <div class="modal-backdrop" onclick="closeProjectLinksModal()"></div>
+        <div class="modal-container links-modal-container">
+            <div class="modal-content links-modal-content">
+                <!-- Header -->
+                <div class="modal-header">
+                    <h2 class="modal-title">Project Links</h2>
+                    <div class="modal-header-actions">
+                        <button class="btn-primary" id="addLinkBtn" onclick="openAddLinkDialog()">
+                            <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd"/>
+                            </svg>
+                            Add Link
+                        </button>
+                        <button class="modal-close" onclick="closeProjectLinksModal()">&times;</button>
+                    </div>
+                </div>
+
+                <!-- Links Table -->
+                <div class="links-table-container">
+                    <table class="links-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 50px;">Icon</th>
+                                <th>Title</th>
+                                <th>URL</th>
+                                <th>Description</th>
+                                <th style="width: 120px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="linksTableBody">
+                            <tr class="no-links-row">
+                                <td colspan="5" style="text-align: center; padding: 40px; color: #9ca3af;">
+                                    No links added yet. Click "Add Link" to create one.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Link Dialog -->
+    <div class="modal" id="linkDialog" style="display: none;">
+        <div class="modal-backdrop" onclick="closeLinkDialog()"></div>
+        <div class="modal-container link-dialog-container">
+            <div class="modal-content link-dialog-content">
+                <!-- Header -->
+                <div class="modal-header">
+                    <h2 class="modal-title" id="linkDialogTitle">Add Link</h2>
+                    <button class="modal-close" onclick="closeLinkDialog()">&times;</button>
+                </div>
+
+                <!-- Form -->
+                <form id="linkForm" class="link-form">
+                    <div class="form-group">
+                        <label for="linkTitle" class="form-label">Title *</label>
+                        <input
+                            type="text"
+                            id="linkTitle"
+                            class="form-input"
+                            placeholder="Enter link title..."
+                            required
+                        />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="linkUrl" class="form-label">URL *</label>
+                        <input
+                            type="url"
+                            id="linkUrl"
+                            class="form-input"
+                            placeholder="https://example.com"
+                            required
+                        />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="linkDescription" class="form-label">Description</label>
+                        <textarea
+                            id="linkDescription"
+                            class="form-textarea"
+                            placeholder="Enter description..."
+                            rows="3"
+                        ></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Icon</label>
+                        <div class="icon-options">
+                            <div class="icon-preview" id="linkIconPreview">
+                                <img src="" alt="Icon" id="linkIconImg" style="display: none; width: 32px; height: 32px;">
+                                <span class="icon-placeholder">No icon</span>
+                            </div>
+                            <div class="icon-buttons">
+                                <button type="button" class="btn-secondary" id="autoFetchIconBtn">
+                                    <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/>
+                                    </svg>
+                                    Auto-fetch
+                                </button>
+                                <button type="button" class="btn-secondary" id="uploadIconBtn">
+                                    <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+                                    </svg>
+                                    Upload
+                                </button>
+                                <input type="file" id="linkIconUpload" accept="image/*" style="display: none;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <input type="hidden" id="linkId" value="">
+                    <input type="hidden" id="linkIconData" value="">
+
+                    <div class="form-actions">
+                        <button type="button" class="btn-cancel" onclick="closeLinkDialog()">Cancel</button>
+                        <button type="submit" class="btn-save" id="saveLinkBtn">
+                            <span class="btn-text">Save</span>
+                            <div class="btn-loading" style="display: none;">
+                                <div class="loading-spinner"></div>
+                                Saving...
+                            </div>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- Back button navigation is handled by project-board.js -->
 </body>
 </html>
-    <script>
-        // Simple auto-initialization for project board
-        document.addEventListener('DOMContentLoaded', () => {
-            console.log('🚀 Auto-initializing ProjectBoard...');
-            if (typeof ProjectBoard !== 'undefined') {
-                console.log('✅ ProjectBoard class found, creating instance...');
-                window.projectBoard = new ProjectBoard();
-                window.projectBoardInstance = window.projectBoard; // For create modal
-            } else {
-                console.log('❌ ProjectBoard class not found');
-            }
-        });
-    </script>
