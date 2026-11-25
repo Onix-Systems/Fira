@@ -17,6 +17,22 @@ import shutil
 from urllib.parse import unquote
 import secrets
 
+
+def safe_join(base_dir, *parts):
+    """Join untrusted path components under base_dir and reject escapes.
+
+    Ids reach these handlers after unquote(), so '%2F' rebuilds a path separator
+    and '%2E%2E' becomes '..'. Splitting the URL first is not enough; the
+    resolved path has to be checked against the base directory.
+    """
+    base = Path(base_dir).resolve()
+    candidate = base.joinpath(*parts).resolve()
+    try:
+        candidate.relative_to(base)
+    except ValueError:
+        raise ValueError('path escapes the base directory')
+    return candidate
+
 # Removed LOCAL_USERS_DB - now using users.json file exclusively
 
 # Firebase integration disabled - using local JSON file
@@ -120,8 +136,17 @@ PROJECTS_BASE_DIR = os.path.join(WORKING_DIRECTORY, 'projects')  # Use projects/
 PORT = int(os.environ.get('FIRA_PORT', 5000))
 REQUIRE_LOGIN = os.environ.get('FIRA_REQUIRE_LOGIN', 'false').lower() == 'true'
 
-# Admin configuration
-ADMIN_PASSWORD = '3Bm6iDAY46vK57aj'
+# Admin configuration. The password used to be hardcoded here and the admin
+# token was derived from it, so anyone reading the repository could log in.
+ADMIN_PASSWORD = os.environ.get('FIRA_ADMIN_PASSWORD')
+if not ADMIN_PASSWORD:
+    # Never fall back to a known value: generate a one-off password so the
+    # server still starts, and tell the operator how to make it permanent.
+    ADMIN_PASSWORD = secrets.token_urlsafe(16)
+    print('WARNING: FIRA_ADMIN_PASSWORD is not set; generated a temporary admin '
+          f'password for this run: {ADMIN_PASSWORD}')
+    print('         Set FIRA_ADMIN_PASSWORD to keep the admin password and token '
+          'stable across restarts.')
 active_admin_tokens = set()
 
 # Generate persistent admin token (same every restart for same password)
@@ -224,11 +249,11 @@ class ProjectManager:
             return True, 0, None, False
 
         # Count current tasks in this status
-        project_path = self.base_dir / project_id
+        project_path = safe_join(self.base_dir, project_id)
         if not project_path.exists():
             return True, 0, limit, False
 
-        status_path = project_path / status
+        status_path = safe_join(project_path, status)
         if not status_path.exists():
             return True, 0, limit, False
 
@@ -299,7 +324,7 @@ class ProjectManager:
         """
         try:
             # Get all tasks for project
-            project_path = self.base_dir / project_id
+            project_path = safe_join(self.base_dir, project_id)
 
             if not project_path.exists():
                 return None
@@ -314,7 +339,7 @@ class ProjectManager:
             }
 
             for state in state_counts.keys():
-                state_path = project_path / state
+                state_path = safe_join(project_path, state)
                 if not state_path.exists():
                     # Try alternative names
                     if state == 'progress':
@@ -390,7 +415,7 @@ class ProjectManager:
             print("Missing project ID")
             return False, "Missing project ID"
 
-        project_path = self.base_dir / project_id
+        project_path = safe_join(self.base_dir, project_id)
         if project_path.exists():
             print(f"Project already exists: {project_id}")
             return False, f"Project {project_id} already exists"
@@ -411,11 +436,11 @@ class ProjectManager:
             default_dev = 'default-dev'
 
             for col in columns:
-                col_path = project_path / col
+                col_path = safe_join(project_path, col)
                 col_path.mkdir(parents=True, exist_ok=True)
                 # Створюємо папку розробника для всіх колонок включаючи backlog
                 # Це виправляє проблему з переміщенням тасок з однаковими іменами
-                dev_path = col_path / default_dev
+                dev_path = safe_join(col_path, default_dev)
                 dev_path.mkdir(parents=True, exist_ok=True)
 
             print(f"Created standard project folders: {', '.join(columns)}")
@@ -446,7 +471,7 @@ class ProjectManager:
 
     def get_project_info(self, project_id):
         """Get project information"""
-        project_path = self.base_dir / project_id
+        project_path = safe_join(self.base_dir, project_id)
         if not project_path.exists():
             return None
 
@@ -478,7 +503,7 @@ class ProjectManager:
 
     def calculate_project_stats(self, project_id):
         """Calculate task statistics for a project"""
-        project_path = self.base_dir / project_id
+        project_path = safe_join(self.base_dir, project_id)
         stats = {
             'backlog': {'count': 0, 'detail': '(0h)'},
             'inProgress': {'count': 0, 'detail': '(0 devs)'},
@@ -497,7 +522,7 @@ class ProjectManager:
             developers = set()
 
             for folder in folders:
-                folder_path = project_path / folder
+                folder_path = safe_join(project_path, folder)
                 if folder_path.exists():
                     # Count direct .md files (excluding README.md)
                     task_files = [f for f in folder_path.glob('*.md') if f.name.lower() != 'readme.md']
@@ -519,7 +544,7 @@ class ProjectManager:
 
     def get_project_developers(self, project_id):
         """Get list of developers from project folder structure"""
-        project_path = self.base_dir / project_id
+        project_path = safe_join(self.base_dir, project_id)
         developers = set()
         
         if not project_path.exists():
@@ -529,7 +554,7 @@ class ProjectManager:
         status_folders = ['backlog', 'progress', 'inprogress', 'review', 'testing', 'done']
 
         for folder_name in status_folders:
-            folder_path = project_path / folder_name
+            folder_path = safe_join(project_path, folder_name)
             if folder_path.exists():
                 # List all subdirectories in status folder
                 for item in folder_path.iterdir():
@@ -544,7 +569,7 @@ class ProjectManager:
 
     def get_project_tasks(self, project_id):
         """Get all tasks for a project"""
-        project_path = self.base_dir / project_id
+        project_path = safe_join(self.base_dir, project_id)
         if not project_path.exists():
             return []
 
@@ -561,7 +586,7 @@ class ProjectManager:
         }
 
         for folder_name, status in folder_mappings.items():
-            folder_path = project_path / folder_name
+            folder_path = safe_join(project_path, folder_name)
             if folder_path.exists():
                 # Check for direct .md files first (tasks without assigned developer)
                 for task_file in folder_path.glob('*.md'):
@@ -680,7 +705,7 @@ class ProjectManager:
     def update_project_info(self, project_id, project_data):
         """Update project information"""
         try:
-            project_path = self.base_dir / project_id
+            project_path = safe_join(self.base_dir, project_id)
             if not project_path.exists():
                 print(f"Project {project_id} does not exist")
                 return False
@@ -706,7 +731,7 @@ class ProjectManager:
 
     def get_project_links(self, project_id):
         """Get all links for a project"""
-        project_path = self.base_dir / project_id
+        project_path = safe_join(self.base_dir, project_id)
         links_path = project_path / 'links'
         links_file = links_path / 'links.json'
 
@@ -723,7 +748,7 @@ class ProjectManager:
 
     def save_project_links(self, project_id, links):
         """Save links for a project"""
-        project_path = self.base_dir / project_id
+        project_path = safe_join(self.base_dir, project_id)
         links_path = project_path / 'links'
         links_path.mkdir(exist_ok=True)
 
@@ -783,14 +808,17 @@ class ProjectManager:
 
     def save_link_icon(self, project_id, link_id, file_data, filename):
         """Save custom icon for a link"""
-        project_path = self.base_dir / project_id
-        icons_path = project_path / 'links' / 'icons'
+        if not re.fullmatch(r'[A-Za-z0-9_-]+', str(link_id)):
+            raise ValueError('invalid link id')
+        icons_path = safe_join(self.base_dir, project_id, 'links', 'icons')
         icons_path.mkdir(parents=True, exist_ok=True)
 
         # Create unique filename
         file_ext = Path(filename).suffix
+        if file_ext.lower() not in ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico'):
+            raise ValueError('unsupported icon type')
         icon_filename = f"{link_id}{file_ext}"
-        icon_path = icons_path / icon_filename
+        icon_path = safe_join(icons_path, icon_filename)
 
         try:
             with open(icon_path, 'wb') as f:
@@ -872,7 +900,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                 print(f"🗑️ Attempting to delete task: {task_id} from project: {project_id}")
 
                 # Знайти та видалити файл таски
-                project_path = self.project_manager.base_dir / project_id
+                project_path = safe_join(self.project_manager.base_dir, project_id)
                 if not project_path.exists():
                     self.send_json_response({
                         'success': False,
@@ -886,9 +914,9 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
 
                 for status in status_folders:
                     # Перевіряємо кореневу папку статусу
-                    status_path = project_path / status
+                    status_path = safe_join(project_path, status)
                     if status_path.exists():
-                        task_file = status_path / f"{task_id}.md"
+                        task_file = safe_join(status_path, f"{task_id}.md")
                         if task_file.exists():
                             task_file_path = task_file
                             break
@@ -896,7 +924,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                         # Перевіряємо підпапки розробників
                         for dev_folder in status_path.iterdir():
                             if dev_folder.is_dir():
-                                task_file = dev_folder / f"{task_id}.md"
+                                task_file = safe_join(dev_folder, f"{task_id}.md")
                                 if task_file.exists():
                                     task_file_path = task_file
                                     break
@@ -980,7 +1008,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
         elif len(path_parts) == 3 and path_parts[0] == 'api' and path_parts[1] == 'projects':
             try:
                 project_id = unquote(path_parts[2])
-                project_path = self.project_manager.base_dir / project_id
+                project_path = safe_join(self.project_manager.base_dir, project_id)
 
                 if not project_path.exists():
                     self.send_json_response({
@@ -1356,8 +1384,8 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                 project_id = unquote(path_parts[2])
                 filename = unquote(path_parts[5])
 
-                project_path = Path(PROJECTS_BASE_DIR) / project_id
-                icon_path = project_path / 'links' / 'icons' / filename
+                project_path = safe_join(PROJECTS_BASE_DIR, project_id)
+                icon_path = safe_join(project_path, 'links', 'icons', filename)
 
                 if not icon_path.exists():
                     self.send_error(404, 'Icon not found')
@@ -1448,7 +1476,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                 project_id = unquote(path_parts[2])
 
                 # Find project directory
-                project_path = Path(PROJECTS_BASE_DIR) / project_id
+                project_path = safe_join(PROJECTS_BASE_DIR, project_id)
                 if not project_path.exists():
                     self.send_error(404, f'Project "{project_id}" not found')
                     return
@@ -1464,16 +1492,16 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                     task_id = unquote(path_parts[4])
                     subfolder = unquote(path_parts[5])  # 'thumbnails'
                     filename = unquote(path_parts[6])
-                    image_path = images_dir / task_id / subfolder / filename
+                    image_path = safe_join(images_dir, task_id, subfolder, filename)
                 elif len(path_parts) == 6:
                     # /api/projects/{project_id}/images/{task_id}/{filename}
                     task_id = unquote(path_parts[4])
                     filename = unquote(path_parts[5])
-                    image_path = images_dir / task_id / filename
+                    image_path = safe_join(images_dir, task_id, filename)
                 else:
                     # Legacy: /api/projects/{project_id}/images/{filename}
                     filename = unquote(path_parts[4])
-                    image_path = images_dir / filename
+                    image_path = safe_join(images_dir, filename)
 
                 if not image_path.exists():
                     self.send_error(404, f'Image "{filename}" not found')
@@ -1513,17 +1541,17 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                 project_id = unquote(path_parts[2])
 
                 # Find project directory
-                project_path = Path(PROJECTS_BASE_DIR) / project_id
+                project_path = safe_join(PROJECTS_BASE_DIR, project_id)
                 if not project_path.exists():
                     self.send_error(404, f'Project "{project_id}" not found')
                     return
 
-                attachments_dir = project_path / 'attachments'
+                attachments_dir = safe_join(project_path, 'attachments')
 
                 # Parse path: /api/projects/{project_id}/attachments/{task_id}/{filename}
                 task_id = unquote(path_parts[4])
                 filename = unquote(path_parts[5])
-                attachment_path = attachments_dir / task_id / filename
+                attachment_path = safe_join(attachments_dir, task_id, filename)
 
                 if not attachment_path.exists():
                     self.send_error(404, f'Attachment "{filename}" not found')
@@ -1568,13 +1596,13 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                 filename = unquote(path_parts[4])
 
                 # Find project directory
-                project_path = Path(PROJECTS_BASE_DIR) / project_id
+                project_path = safe_join(PROJECTS_BASE_DIR, project_id)
                 if not project_path.exists():
                     self.send_error(404, f'Project "{project_id}" not found')
                     return
 
                 images_dir = project_path / 'images'
-                image_path = images_dir / filename
+                image_path = safe_join(images_dir, filename)
 
                 if not image_path.exists():
                     self.send_error(404, f'Image "{filename}" not found')
@@ -2562,7 +2590,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                 task_status = None
                 task_developer = None
 
-                project_path = self.project_manager.base_dir / project_id
+                project_path = safe_join(self.project_manager.base_dir, project_id)
                 if not project_path.exists():
                     self.send_json_response({
                         'success': False,
@@ -2572,10 +2600,10 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
 
                 # Search for task in all status folders
                 for status in ['backlog', 'progress', 'review', 'testing', 'done']:
-                    status_path = project_path / status
+                    status_path = safe_join(project_path, status)
                     if status_path.exists():
                         # Check direct folder
-                        task_file = status_path / f"{task_id}.md"
+                        task_file = safe_join(status_path, f"{task_id}.md")
                         if task_file.exists():
                             task_file_path = task_file
                             task_status = status
@@ -2584,7 +2612,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                         # Check developer subfolders
                         for dev_folder in status_path.iterdir():
                             if dev_folder.is_dir():
-                                task_file = dev_folder / f"{task_id}.md"
+                                task_file = safe_join(dev_folder, f"{task_id}.md")
                                 if task_file.exists():
                                     task_file_path = task_file
                                     task_status = status
@@ -2663,7 +2691,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                 task_status = None
                 task_developer = None
 
-                project_path = self.project_manager.base_dir / project_id
+                project_path = safe_join(self.project_manager.base_dir, project_id)
                 if not project_path.exists():
                     self.send_json_response({
                         'success': False,
@@ -2673,10 +2701,10 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
 
                 # Search for task in all status folders
                 for status in ['backlog', 'progress', 'review', 'testing', 'done']:
-                    status_path = project_path / status
+                    status_path = safe_join(project_path, status)
                     if status_path.exists():
                         # Check direct folder
-                        task_file = status_path / f"{task_id}.md"
+                        task_file = safe_join(status_path, f"{task_id}.md")
                         if task_file.exists():
                             task_file_path = task_file
                             task_status = status
@@ -2685,7 +2713,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                         # Check developer subfolders
                         for dev_folder in status_path.iterdir():
                             if dev_folder.is_dir():
-                                task_file = dev_folder / f"{task_id}.md"
+                                task_file = safe_join(dev_folder, f"{task_id}.md")
                                 if task_file.exists():
                                     task_file_path = task_file
                                     task_status = status
@@ -3148,7 +3176,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                         return
                     
                     # Create directory path
-                    project_path = self.project_manager.base_dir / project_id
+                    project_path = safe_join(self.project_manager.base_dir, project_id)
                     if not project_path.exists():
                         self.send_json_response({
                             'success': False,
@@ -3157,11 +3185,11 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                         return
                     
                     # Create parent directory if it doesn't exist
-                    parent_path = project_path / parent_dir
+                    parent_path = safe_join(project_path, parent_dir)
                     parent_path.mkdir(exist_ok=True)
                     
                     # Create the target directory
-                    target_path = parent_path / dir_name
+                    target_path = safe_join(parent_path, dir_name)
                     target_path.mkdir(exist_ok=True)
                     
                     # Create a README.md file in the directory
@@ -3199,7 +3227,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
 
     def update_task_file(self, project_id, task_data):
         """Update existing task file content and potentially move it"""
-        project_path = self.project_manager.base_dir / project_id
+        project_path = safe_join(self.project_manager.base_dir, project_id)
         if not project_path.exists():
             return False
 
@@ -3215,10 +3243,10 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
         print(f"🔍 Шукаємо файл для task_id: {task_id}")
 
         for folder in ['backlog', 'progress', 'inprogress', 'review', 'testing', 'done']:
-            folder_path = project_path / folder
+            folder_path = safe_join(project_path, folder)
             if folder_path.exists():
                 # Check direct files
-                task_file = folder_path / f"{task_id}.md"
+                task_file = safe_join(folder_path, f"{task_id}.md")
                 if task_file.exists():
                     # ПЕРЕВІРЯЄМО ЧИ ЦЕЙ ФАЙЛ ДІЙСНо МАЄ ПРАВИЛЬНИЙ ID
                     try:
@@ -3237,7 +3265,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                 # Check developer subfolders (for all folders)
                 for dev_folder in folder_path.iterdir():
                     if dev_folder.is_dir() and not dev_folder.name.startswith('.'):
-                        task_file = dev_folder / f"{task_id}.md"
+                        task_file = safe_join(dev_folder, f"{task_id}.md")
                         if task_file.exists():
                             # ПЕРЕВІРЯЄМО ЧИ ЦЕЙ ФАЙЛ ДІЙСНо МАЄ ПРАВИЛЬНИЙ ID
                             try:
@@ -3286,13 +3314,13 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
         print(f"  Final new_developer: {repr(new_developer)}")
 
         # Calculate new path
-        new_folder_path = project_path / new_status
+        new_folder_path = safe_join(project_path, new_status)
         # Додаємо підтримку папок девелоперів для всіх статусів включаючи backlog
         if new_developer and new_status in ['backlog', 'progress', 'inprogress', 'review', 'testing', 'done']:
-            new_folder_path = new_folder_path / new_developer
+            new_folder_path = safe_join(new_folder_path, new_developer)
 
         new_folder_path.mkdir(parents=True, exist_ok=True)
-        new_task_file = new_folder_path / f"{task_id}.md"
+        new_task_file = safe_join(new_folder_path, f"{task_id}.md")
 
         # CRITICAL FIX: Verify that we're only working with the specific task file
         # Check if the new file path would overwrite a different task
@@ -3411,7 +3439,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
 
     def create_task_file(self, project_id, task_data):
         """Create a new task file"""
-        project_path = self.project_manager.base_dir / project_id
+        project_path = safe_join(self.project_manager.base_dir, project_id)
         if not project_path.exists():
             print(f"⚠️ Project directory not found, creating: {project_path}")
             # Auto-create the project with basic structure
@@ -3431,13 +3459,13 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
         target_folder = task_data.get('folder', 'backlog')  # Default to backlog
 
         # Create folder path
-        folder_path = project_path / target_folder
+        folder_path = safe_join(project_path, target_folder)
 
         # Create nested directories if needed (e.g., progress/dev-name)
         folder_path.mkdir(parents=True, exist_ok=True)
 
         # Create the task file
-        task_file = folder_path / f"{task_id}.md"
+        task_file = safe_join(folder_path, f"{task_id}.md")
 
         # Check if task file already exists
         if task_file.exists():
@@ -3503,7 +3531,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
         import time
 
         # Find project directory
-        project_path = Path(PROJECTS_BASE_DIR) / project_id
+        project_path = safe_join(PROJECTS_BASE_DIR, project_id)
         if not project_path.exists():
             self.send_json_response({
                 'success': False,
@@ -3562,7 +3590,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
         # Create task-specific or project-wide images directory
         if task_id:
             # Task-specific structure: images/TASK-123/
-            images_base = project_path / 'images' / task_id
+            images_base = safe_join(project_path, 'images', task_id)
             images_base.mkdir(parents=True, exist_ok=True)
             thumbnails_dir = images_base / 'thumbnails'
             thumbnails_dir.mkdir(exist_ok=True)
@@ -3576,7 +3604,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
         timestamp = int(time.time() * 1000)
         safe_filename = file_item.filename.replace(' ', '_')
         unique_filename = f"{timestamp}-{safe_filename}"
-        file_path = images_base / unique_filename
+        file_path = safe_join(images_base, unique_filename)
 
         # Save original file
         try:
@@ -3601,7 +3629,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                 # Save thumbnail
                 if thumbnails_dir:
                     thumb_name = f"{timestamp}-{safe_filename.rsplit('.', 1)[0]}_thumb.{file_extension}"
-                    thumb_path = thumbnails_dir / thumb_name
+                    thumb_path = safe_join(thumbnails_dir, thumb_name)
                     thumb_img.save(thumb_path, optimize=True, quality=85)
                     thumbnail_filename = thumb_name
 
@@ -3690,7 +3718,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
     def get_task_images(self, project_id, task_id):
         """Get all images for a specific task"""
         try:
-            project_path = Path(PROJECTS_BASE_DIR) / project_id
+            project_path = safe_join(PROJECTS_BASE_DIR, project_id)
             if not project_path.exists():
                 return {'success': False, 'error': 'Project not found'}, 404
 
@@ -3714,17 +3742,17 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
     def delete_task_image(self, project_id, task_id, filename):
         """Delete a specific image"""
         try:
-            project_path = Path(PROJECTS_BASE_DIR) / project_id
+            project_path = safe_join(PROJECTS_BASE_DIR, project_id)
             if not project_path.exists():
                 return {'success': False, 'error': 'Project not found'}, 404
 
             # Delete image file
             if task_id:
-                image_path = project_path / 'images' / task_id / filename
+                image_path = safe_join(project_path, 'images', task_id, filename)
                 thumb_name = filename.rsplit('.', 1)[0] + '_thumb.' + filename.rsplit('.', 1)[1]
-                thumb_path = project_path / 'images' / task_id / 'thumbnails' / thumb_name
+                thumb_path = safe_join(project_path, 'images', task_id, 'thumbnails', thumb_name)
             else:
-                image_path = project_path / 'images' / filename
+                image_path = safe_join(project_path, 'images', filename)
                 thumb_path = None
 
             if image_path.exists():
@@ -3815,7 +3843,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         # Find project
-        project_path = Path(PROJECTS_BASE_DIR) / project_id
+        project_path = safe_join(PROJECTS_BASE_DIR, project_id)
         if not project_path.exists():
             self.send_json_response({
                 'success': False,
@@ -3824,7 +3852,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         # Create attachments directory structure
-        attachments_base = project_path / 'attachments' / task_id
+        attachments_base = safe_join(project_path, 'attachments', task_id)
         attachments_base.mkdir(parents=True, exist_ok=True)
 
         # Generate unique filename with timestamp
@@ -3835,7 +3863,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
         import re
         safe_filename = re.sub(r'[^a-zA-Z0-9._-]', '', safe_filename)
         unique_filename = f"{timestamp}-{task_id}-{safe_filename}"
-        file_path = attachments_base / unique_filename
+        file_path = safe_join(attachments_base, unique_filename)
 
         # Save file
         try:
@@ -3884,7 +3912,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
         """Get list of attachments for a task"""
         print(f"🔍 get_task_attachments called: project_id={project_id}, task_id={task_id}")
         try:
-            project_path = Path(PROJECTS_BASE_DIR) / project_id
+            project_path = safe_join(PROJECTS_BASE_DIR, project_id)
             print(f"🔍 Project path: {project_path}, exists: {project_path.exists()}")
             if not project_path.exists():
                 return {'success': False, 'error': 'Project not found'}, 404
@@ -3908,7 +3936,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                     print(f"Warning: metadata read failed: {e}")
 
             # Fallback: scan files (with fixed parsing)
-            attachments_dir = project_path / 'attachments' / task_id
+            attachments_dir = safe_join(project_path, 'attachments', task_id)
             attachments = []
 
             if attachments_dir.exists():
@@ -3953,12 +3981,12 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
     def delete_task_attachment(self, project_id, task_id, filename):
         """Delete a specific attachment"""
         try:
-            project_path = Path(PROJECTS_BASE_DIR) / project_id
+            project_path = safe_join(PROJECTS_BASE_DIR, project_id)
             if not project_path.exists():
                 return {'success': False, 'error': 'Project not found'}, 404
 
             # Delete attachment file
-            attachment_path = project_path / 'attachments' / task_id / filename
+            attachment_path = safe_join(project_path, 'attachments', task_id, filename)
             file_existed = False
 
             if attachment_path.exists():

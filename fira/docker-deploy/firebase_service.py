@@ -202,9 +202,11 @@ class FirebaseService:
         logger.info(f"🔄 Falling back to local admin authentication for: {username}")
         admin_credentials = [
             {'username': 'admin', 'password': 'admin123'},
-            {'username': 'fira', 'password': 'fira2024'},
-            {'username': 'admin', 'password': '3Bm6iDAY46vK57aj'}  # Match mini-server ADMIN_PASSWORD
+            {'username': 'fira', 'password': 'fira2024'}
         ]
+        if os.environ.get('FIRA_ADMIN_PASSWORD'):
+            # Match mini-server ADMIN_PASSWORD
+            admin_credentials.append({'username': 'admin', 'password': os.environ['FIRA_ADMIN_PASSWORD']})
         
         is_valid = any(cred['username'] == username and cred['password'] == password 
                       for cred in admin_credentials)
