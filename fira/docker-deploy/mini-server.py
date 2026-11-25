@@ -140,10 +140,13 @@ REQUIRE_LOGIN = os.environ.get('FIRA_REQUIRE_LOGIN', 'false').lower() == 'true'
 # token was derived from it, so anyone reading the repository could log in.
 ADMIN_PASSWORD = os.environ.get('FIRA_ADMIN_PASSWORD')
 if not ADMIN_PASSWORD:
-    raise RuntimeError(
-        'FIRA_ADMIN_PASSWORD must be set; refusing to start with a missing or '
-        'published admin password.'
-    )
+    # Never fall back to a known value: generate a one-off password so the
+    # server still starts, and tell the operator how to make it permanent.
+    ADMIN_PASSWORD = secrets.token_urlsafe(16)
+    print('WARNING: FIRA_ADMIN_PASSWORD is not set; generated a temporary admin '
+          f'password for this run: {ADMIN_PASSWORD}')
+    print('         Set FIRA_ADMIN_PASSWORD to keep the admin password and token '
+          'stable across restarts.')
 active_admin_tokens = set()
 
 # Generate persistent admin token (same every restart for same password)
@@ -250,7 +253,7 @@ class ProjectManager:
         if not project_path.exists():
             return True, 0, limit, False
 
-        status_path = project_path / status
+        status_path = safe_join(project_path, status)
         if not status_path.exists():
             return True, 0, limit, False
 
@@ -336,7 +339,7 @@ class ProjectManager:
             }
 
             for state in state_counts.keys():
-                state_path = project_path / state
+                state_path = safe_join(project_path, state)
                 if not state_path.exists():
                     # Try alternative names
                     if state == 'progress':
@@ -433,11 +436,11 @@ class ProjectManager:
             default_dev = 'default-dev'
 
             for col in columns:
-                col_path = project_path / col
+                col_path = safe_join(project_path, col)
                 col_path.mkdir(parents=True, exist_ok=True)
                 # Створюємо папку розробника для всіх колонок включаючи backlog
                 # Це виправляє проблему з переміщенням тасок з однаковими іменами
-                dev_path = col_path / default_dev
+                dev_path = safe_join(col_path, default_dev)
                 dev_path.mkdir(parents=True, exist_ok=True)
 
             print(f"Created standard project folders: {', '.join(columns)}")
@@ -519,7 +522,7 @@ class ProjectManager:
             developers = set()
 
             for folder in folders:
-                folder_path = project_path / folder
+                folder_path = safe_join(project_path, folder)
                 if folder_path.exists():
                     # Count direct .md files (excluding README.md)
                     task_files = [f for f in folder_path.glob('*.md') if f.name.lower() != 'readme.md']
@@ -551,7 +554,7 @@ class ProjectManager:
         status_folders = ['backlog', 'progress', 'inprogress', 'review', 'testing', 'done']
 
         for folder_name in status_folders:
-            folder_path = project_path / folder_name
+            folder_path = safe_join(project_path, folder_name)
             if folder_path.exists():
                 # List all subdirectories in status folder
                 for item in folder_path.iterdir():
@@ -583,7 +586,7 @@ class ProjectManager:
         }
 
         for folder_name, status in folder_mappings.items():
-            folder_path = project_path / folder_name
+            folder_path = safe_join(project_path, folder_name)
             if folder_path.exists():
                 # Check for direct .md files first (tasks without assigned developer)
                 for task_file in folder_path.glob('*.md'):
@@ -812,7 +815,7 @@ class ProjectManager:
 
         # Create unique filename
         file_ext = Path(filename).suffix
-        if file_ext.lower() not in ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'):
+        if file_ext.lower() not in ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico'):
             raise ValueError('unsupported icon type')
         icon_filename = f"{link_id}{file_ext}"
         icon_path = safe_join(icons_path, icon_filename)
@@ -911,9 +914,9 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
 
                 for status in status_folders:
                     # Перевіряємо кореневу папку статусу
-                    status_path = project_path / status
+                    status_path = safe_join(project_path, status)
                     if status_path.exists():
-                        task_file = status_path / f"{task_id}.md"
+                        task_file = safe_join(status_path, f"{task_id}.md")
                         if task_file.exists():
                             task_file_path = task_file
                             break
@@ -921,7 +924,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                         # Перевіряємо підпапки розробників
                         for dev_folder in status_path.iterdir():
                             if dev_folder.is_dir():
-                                task_file = dev_folder / f"{task_id}.md"
+                                task_file = safe_join(dev_folder, f"{task_id}.md")
                                 if task_file.exists():
                                     task_file_path = task_file
                                     break
@@ -2597,10 +2600,10 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
 
                 # Search for task in all status folders
                 for status in ['backlog', 'progress', 'review', 'testing', 'done']:
-                    status_path = project_path / status
+                    status_path = safe_join(project_path, status)
                     if status_path.exists():
                         # Check direct folder
-                        task_file = status_path / f"{task_id}.md"
+                        task_file = safe_join(status_path, f"{task_id}.md")
                         if task_file.exists():
                             task_file_path = task_file
                             task_status = status
@@ -2609,7 +2612,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                         # Check developer subfolders
                         for dev_folder in status_path.iterdir():
                             if dev_folder.is_dir():
-                                task_file = dev_folder / f"{task_id}.md"
+                                task_file = safe_join(dev_folder, f"{task_id}.md")
                                 if task_file.exists():
                                     task_file_path = task_file
                                     task_status = status
@@ -2698,10 +2701,10 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
 
                 # Search for task in all status folders
                 for status in ['backlog', 'progress', 'review', 'testing', 'done']:
-                    status_path = project_path / status
+                    status_path = safe_join(project_path, status)
                     if status_path.exists():
                         # Check direct folder
-                        task_file = status_path / f"{task_id}.md"
+                        task_file = safe_join(status_path, f"{task_id}.md")
                         if task_file.exists():
                             task_file_path = task_file
                             task_status = status
@@ -2710,7 +2713,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                         # Check developer subfolders
                         for dev_folder in status_path.iterdir():
                             if dev_folder.is_dir():
-                                task_file = dev_folder / f"{task_id}.md"
+                                task_file = safe_join(dev_folder, f"{task_id}.md")
                                 if task_file.exists():
                                     task_file_path = task_file
                                     task_status = status
@@ -3182,11 +3185,11 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                         return
                     
                     # Create parent directory if it doesn't exist
-                    parent_path = project_path / parent_dir
+                    parent_path = safe_join(project_path, parent_dir)
                     parent_path.mkdir(exist_ok=True)
                     
                     # Create the target directory
-                    target_path = parent_path / dir_name
+                    target_path = safe_join(parent_path, dir_name)
                     target_path.mkdir(exist_ok=True)
                     
                     # Create a README.md file in the directory
@@ -3240,10 +3243,10 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
         print(f"🔍 Шукаємо файл для task_id: {task_id}")
 
         for folder in ['backlog', 'progress', 'inprogress', 'review', 'testing', 'done']:
-            folder_path = project_path / folder
+            folder_path = safe_join(project_path, folder)
             if folder_path.exists():
                 # Check direct files
-                task_file = folder_path / f"{task_id}.md"
+                task_file = safe_join(folder_path, f"{task_id}.md")
                 if task_file.exists():
                     # ПЕРЕВІРЯЄМО ЧИ ЦЕЙ ФАЙЛ ДІЙСНо МАЄ ПРАВИЛЬНИЙ ID
                     try:
@@ -3262,7 +3265,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                 # Check developer subfolders (for all folders)
                 for dev_folder in folder_path.iterdir():
                     if dev_folder.is_dir() and not dev_folder.name.startswith('.'):
-                        task_file = dev_folder / f"{task_id}.md"
+                        task_file = safe_join(dev_folder, f"{task_id}.md")
                         if task_file.exists():
                             # ПЕРЕВІРЯЄМО ЧИ ЦЕЙ ФАЙЛ ДІЙСНо МАЄ ПРАВИЛЬНИЙ ID
                             try:
@@ -3311,13 +3314,13 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
         print(f"  Final new_developer: {repr(new_developer)}")
 
         # Calculate new path
-        new_folder_path = project_path / new_status
+        new_folder_path = safe_join(project_path, new_status)
         # Додаємо підтримку папок девелоперів для всіх статусів включаючи backlog
         if new_developer and new_status in ['backlog', 'progress', 'inprogress', 'review', 'testing', 'done']:
-            new_folder_path = new_folder_path / new_developer
+            new_folder_path = safe_join(new_folder_path, new_developer)
 
         new_folder_path.mkdir(parents=True, exist_ok=True)
-        new_task_file = new_folder_path / f"{task_id}.md"
+        new_task_file = safe_join(new_folder_path, f"{task_id}.md")
 
         # CRITICAL FIX: Verify that we're only working with the specific task file
         # Check if the new file path would overwrite a different task
@@ -3456,13 +3459,13 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
         target_folder = task_data.get('folder', 'backlog')  # Default to backlog
 
         # Create folder path
-        folder_path = project_path / target_folder
+        folder_path = safe_join(project_path, target_folder)
 
         # Create nested directories if needed (e.g., progress/dev-name)
         folder_path.mkdir(parents=True, exist_ok=True)
 
         # Create the task file
-        task_file = folder_path / f"{task_id}.md"
+        task_file = safe_join(folder_path, f"{task_id}.md")
 
         # Check if task file already exists
         if task_file.exists():
@@ -3601,7 +3604,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
         timestamp = int(time.time() * 1000)
         safe_filename = file_item.filename.replace(' ', '_')
         unique_filename = f"{timestamp}-{safe_filename}"
-        file_path = images_base / unique_filename
+        file_path = safe_join(images_base, unique_filename)
 
         # Save original file
         try:
@@ -3626,7 +3629,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
                 # Save thumbnail
                 if thumbnails_dir:
                     thumb_name = f"{timestamp}-{safe_filename.rsplit('.', 1)[0]}_thumb.{file_extension}"
-                    thumb_path = thumbnails_dir / thumb_name
+                    thumb_path = safe_join(thumbnails_dir, thumb_name)
                     thumb_img.save(thumb_path, optimize=True, quality=85)
                     thumbnail_filename = thumb_name
 
@@ -3860,7 +3863,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
         import re
         safe_filename = re.sub(r'[^a-zA-Z0-9._-]', '', safe_filename)
         unique_filename = f"{timestamp}-{task_id}-{safe_filename}"
-        file_path = attachments_base / unique_filename
+        file_path = safe_join(attachments_base, unique_filename)
 
         # Save file
         try:

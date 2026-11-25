@@ -53,6 +53,8 @@ FIRA_REQUIRE_LOGIN=true     # Force authentication
 FIRA_PROJECTS_DIR=./projects # Projects directory
 ```
 
+`FIRA_ADMIN_PASSWORD` sets the admin password. If it is not set, the server generates a temporary one on every start and prints it to the log, so set it explicitly for production (e.g. `docker run -e FIRA_ADMIN_PASSWORD=... ...`).
+
 ## Project Structure
 
 ```
