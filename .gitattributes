@@ -1,17 +1,9 @@
-# Ensure shell scripts always use LF line endings
-*.sh text eol=lf
+# Normalize all text files to LF in the repository and working tree
+* text=auto eol=lf
 
-# Python files should use LF
-*.py text eol=lf
-
-# JavaScript files should use LF
-*.js text eol=lf
-*.html text eol=lf
-*.css text eol=lf
-*.json text eol=lf
-*.md text eol=lf
-*.yml text eol=lf
-*.yaml text eol=lf
+# Windows batch scripts must keep CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
 
 # Binary files
 *.png binary
@@ -20,3 +12,6 @@
 *.gif binary
 *.ico binary
 *.zip binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
