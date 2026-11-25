@@ -136,4 +136,4 @@ Implement JWT-based authentication..." > projects/my-project/backlog/AUTH-001.md
 The file-based architecture means any tool that can write Markdown files can create tasks for Fira.
 
 ## Support
-- Contact: denys.kramar@onix-systems.com
+- Contact: denis@onix-systems.com
