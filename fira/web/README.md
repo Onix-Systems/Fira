@@ -14,7 +14,7 @@ start.bat
 ./start.sh
 ```
 
-Opens http://localhost:8080 automatically. Login: admin/admin123
+Opens http://localhost:8080 automatically. Admin login uses the password from `FIRA_ADMIN_PASSWORD` (or the temporary one printed in the server log).
 
 ## Manual Start
 
@@ -38,13 +38,8 @@ python mini-server.py
 
 ## Configuration
 
-Edit `users.json`:
-```json
-{
-    "admin": {"password": "admin123", "role": "admin"},
-    "user": {"password": "user123", "role": "user"}
-}
-```
+Copy `users.example.json` to `users.json` and set your own users and passwords.
+`users.json` is git-ignored so credentials never end up in the repository.
 
 Environment variables:
 ```bash
