@@ -6,6 +6,7 @@ Run this script to add test users to Firestore
 
 from firebase_service import firebase_service, create_user, is_firebase_available
 import sys
+import secrets
 
 def init_test_users():
     """Initialize test users in Firebase"""
@@ -19,25 +20,25 @@ def init_test_users():
             'email': 'admin@fira.local',
             'username': 'admin',
             'role': 'admin',
-            'password': 'admin123'  # In production, this should be hashed
+            'password': secrets.token_urlsafe(12)
         },
         {
             'email': 'user@fira.local', 
             'username': 'user',
             'role': 'user',
-            'password': 'user123'
+            'password': secrets.token_urlsafe(12)
         },
         {
             'email': 'fira@fira.local',
             'username': 'fira',
             'role': 'admin',
-            'password': 'fira2024'
+            'password': secrets.token_urlsafe(12)
         },
         {
             'email': 'test@fira.local',
             'username': 'test',
             'role': 'user', 
-            'password': 'test123'
+            'password': secrets.token_urlsafe(12)
         }
     ]
     
@@ -58,13 +59,13 @@ def init_test_users():
                     'email': user['email'],
                     'username': user['username'],
                     'role': user['role'],
-                    'password': user['password'],  # In production, hash this!
+                    'password': user['password'],  # TODO: store a hash instead
                     'active': True,
                     'created_at': db.server_timestamp()
                 }
                 
                 doc_ref = db.collection('users').add(user_data)
-                print(f"✅ Created user: {user['email']} (ID: {doc_ref[1].id})")
+                print(f"✅ Created user: {user['email']} / password: {user['password']} (ID: {doc_ref[1].id})")
             
         except Exception as e:
             print(f"❌ Failed to create user {user['email']}: {e}")
@@ -79,10 +80,8 @@ def main():
     else:
         print("Usage: python init_firebase_users.py init")
         print("\nThis will create test users in Firebase:")
-        print("- admin@fira.local (admin/admin123)")
-        print("- user@fira.local (user/user123)")
-        print("- fira@fira.local (fira/fira2024)")
-        print("- test@fira.local (test/test123)")
+        print("- admin@fira.local, user@fira.local, fira@fira.local, test@fira.local")
+        print("Random passwords are generated and printed once on creation.")
 
 if __name__ == '__main__':
     main()

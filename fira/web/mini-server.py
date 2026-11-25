@@ -16,6 +16,11 @@ from datetime import datetime
 import shutil
 from urllib.parse import unquote
 import secrets
+import io
+
+
+class UnsafePathError(ValueError):
+    """Raised when a user-supplied path component escapes its base directory."""
 
 
 def safe_join(base_dir, *parts):
@@ -30,8 +35,52 @@ def safe_join(base_dir, *parts):
     try:
         candidate.relative_to(base)
     except ValueError:
-        raise ValueError('path escapes the base directory')
+        raise UnsafePathError('path escapes the base directory')
     return candidate
+
+
+class UploadedField:
+    """One multipart/form-data field (subset of the old cgi.FieldStorage API)."""
+
+    def __init__(self, name, filename, data):
+        self.name = name
+        self.filename = filename
+        self.file = io.BytesIO(data)
+        self.value = data if filename is not None else data.decode('utf-8', 'replace')
+
+
+class MultipartForm(dict):
+    def getvalue(self, key, default=None):
+        field = self.get(key)
+        return field.value if field is not None else default
+
+
+def parse_multipart_form(headers, rfile):
+    """Parse a multipart/form-data request body.
+
+    The cgi module was removed in Python 3.13, so uploads crashed with
+    "No module named 'cgi'" on current Python versions.
+    """
+    from email.parser import BytesParser
+    from email.policy import HTTP
+
+    content_type = headers.get('Content-Type', '')
+    length = int(headers.get('Content-Length') or 0)
+    body = rfile.read(length) if length > 0 else b''
+    message = BytesParser(policy=HTTP).parsebytes(
+        b'Content-Type: ' + content_type.encode('latin-1') +
+        b'\r\nMIME-Version: 1.0\r\n\r\n' + body
+    )
+    form = MultipartForm()
+    if not message.is_multipart():
+        return form
+    for part in message.iter_parts():
+        name = part.get_param('name', header='content-disposition')
+        if not name:
+            continue
+        data = part.get_payload(decode=True) or b''
+        form[name] = UploadedField(name, part.get_filename(), data)
+    return form
 
 # Removed LOCAL_USERS_DB - now using users.json file exclusively
 
@@ -85,7 +134,7 @@ def validate_admin_credentials(username, password):
     users = load_users()
     for user in users:
         if (user.get('username') == username or user.get('email') == username):
-            if user.get('password') == password and user.get('role') in ['editor', 'admin']:
+            if password and user.get('password') == password and user.get('role') in ['editor', 'admin']:
                 return True
     return False
 
@@ -768,6 +817,8 @@ class ProjectManager:
 
         # Generate unique ID
         link_id = link_data.get('id') or f"link-{len(links) + 1}"
+        if not re.fullmatch(r'[A-Za-z0-9_-]+', str(link_id)):
+            raise ValueError('invalid link id')
 
         new_link = {
             'id': link_id,
@@ -2085,7 +2136,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
 
                         users = load_users()
                         for user in users:
-                            if (user.get('username') == email or user.get('email') == email) and user.get('password') == password:
+                            if password and (user.get('username') == email or user.get('email') == email) and user.get('password') == password:
                                 if user.get('role') in ['editor', 'viewer'] and user.get('active', True):
                                     login_successful = True
                                     login_method = f'json_admin_{user["role"]}'
@@ -3629,7 +3680,6 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
         Supports: /api/projects/{project_id}/upload-image (legacy)
         Or: /api/projects/{project_id}/tasks/{task_id}/images (new)
         """
-        import cgi
         import uuid
         import os
         from pathlib import Path
@@ -3645,14 +3695,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         # Parse multipart form data
-        form = cgi.FieldStorage(
-            fp=self.rfile,
-            headers=self.headers,
-            environ={
-                'REQUEST_METHOD': 'POST',
-                'CONTENT_TYPE': self.headers['Content-Type'],
-            }
-        )
+        form = parse_multipart_form(self.headers, self.rfile)
 
         if 'image' not in form:
             self.send_json_response({
@@ -3854,7 +3897,8 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
             # Delete image file
             if task_id:
                 image_path = safe_join(project_path, 'images', task_id, filename)
-                thumb_name = filename.rsplit('.', 1)[0] + '_thumb.' + filename.rsplit('.', 1)[1]
+                stem, dot, ext = filename.rpartition('.')
+                thumb_name = f"{stem}_thumb.{ext}" if dot else f"{filename}_thumb"
                 thumb_path = safe_join(project_path, 'images', task_id, 'thumbnails', thumb_name)
             else:
                 image_path = safe_join(project_path, 'images', filename)
@@ -3903,12 +3947,7 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         # Parse multipart form data
-        import cgi
-        form = cgi.FieldStorage(
-            fp=self.rfile,
-            headers=self.headers,
-            environ={'REQUEST_METHOD': 'POST'}
-        )
+        form = parse_multipart_form(self.headers, self.rfile)
 
         if 'file' not in form:
             self.send_json_response({
@@ -4160,7 +4199,16 @@ class FiraRequestHandler(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             print(f"Error updating attachment metadata: {e}")
 
+    def send_error(self, code, message=None, explain=None):
+        if code == 500 and isinstance(sys.exc_info()[1], UnsafePathError):
+            code, message = 400, 'Invalid path'
+        super().send_error(code, message, explain)
+
     def send_json_response(self, data, status_code=200):
+        if status_code == 500 and isinstance(sys.exc_info()[1], UnsafePathError):
+            status_code = 400
+            if isinstance(data, dict) and 'error' in data:
+                data = dict(data, error='Invalid path')
         self.send_response(status_code)
         self.send_header('Content-Type', 'application/json; charset=utf-8')
         self.end_headers()

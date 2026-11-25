@@ -200,10 +200,7 @@ class FirebaseService:
         
         # Fallback to local admin credentials when Firebase is not available or fails
         logger.info(f"🔄 Falling back to local admin authentication for: {username}")
-        admin_credentials = [
-            {'username': 'admin', 'password': 'admin123'},
-            {'username': 'fira', 'password': 'fira2024'}
-        ]
+        admin_credentials = []
         if os.environ.get('FIRA_ADMIN_PASSWORD'):
             # Match mini-server ADMIN_PASSWORD
             admin_credentials.append({'username': 'admin', 'password': os.environ['FIRA_ADMIN_PASSWORD']})

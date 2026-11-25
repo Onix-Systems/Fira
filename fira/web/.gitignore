@@ -1,0 +1,4 @@
+# Local credentials, never commit
+users.json
+__pycache__/
+*.pyc
